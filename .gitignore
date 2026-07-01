@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Data - keep directory structure but ignore actual data files
+data/raw/**
+data/processed/**
+data/cache/**
+# Proposed checkpoints are ~611MB each - too large for GitHub
+data/models/proposed_fold*
+data/models/fold_results.pkl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# API
+api/__pycache__/
+
+# Training logs
+logs/
+*.log

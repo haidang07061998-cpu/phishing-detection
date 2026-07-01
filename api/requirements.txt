@@ -1,0 +1,14 @@
+flask
+flask-cors
+torch>=2.3.0
+transformers>=4.40.0
+numpy
+pandas
+scikit-learn
+beautifulsoup4
+lxml
+dnspython
+python-whois
+cryptography
+requests
+tqdm

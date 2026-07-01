@@ -1,0 +1,17 @@
+{
+  "model": "TabTransformer + ModernBERT + GatedFusion",
+  "sample_size": 50000,
+  "n_folds": 5,
+  "accuracy": 0.97696,
+  "accuracy_std": 0.000969,
+  "precision": 0.975295,
+  "precision_std": 0.002082,
+  "recall": 0.97872,
+  "recall_std": 0.002676,
+  "f1": 0.977,
+  "f1_std": 0.000983,
+  "auc": 0.992765,
+  "auc_std": 0.000472,
+  "fpr": 0.0248,
+  "fpr_std": 0.002187
+}
