@@ -1,6 +1,17 @@
 """
-Proposed - TabTransformer + ModernBERT + GatedFusion with 5-fold CV.
+Proposed - TabTransformer + ModernBERT + GatedFusion with 3-fold CV.
 Matches kaggle_proposed.ipynb logic for local training.
+
+3-fold CV rationale: The Proposed model is 10-15x larger than baselines
+(TabTransformer + ModernBERT + GatedFusion), and training on Kaggle free GPUs
+has a 30-hour weekly quota. 3 folds keep each run under ~8 hours, allowing
+iterative development within quota limits.
+
+IMPORTANT comparison disclaimer: Proposed uses 3-fold CV while baselines use
+5-fold CV. Direct comparison of variance/std across models is not meaningful —
+the Proposed model's std is computed from 3 folds vs 5 for baselines.
+Reported mean metrics are still comparable, but the Proposed model's variance
+estimates are less reliable.
 """
 
 import os, sys, json, gc
@@ -164,7 +175,10 @@ def main():
     indices = np.arange(len(full_data))
     all_metrics = []
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
-    crit = nn.BCEWithLogitsLoss()
+    pos_count = sum(labels); neg_count = len(labels) - pos_count
+    pos_weight = torch.tensor([neg_count / pos_count], device=DEVICE)
+    crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    print(f"pos_weight={pos_weight.item():.2f} (neg={neg_count}, pos={int(pos_count)})")
 
     for fold, (tr_idx, te_idx) in enumerate(skf.split(indices, labels)):
         print(f"\n{'='*58}")

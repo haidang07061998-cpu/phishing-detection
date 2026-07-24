@@ -119,7 +119,10 @@ def main():
 
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
     all_metrics = []
-    crit = nn.BCEWithLogitsLoss()
+    pos_count = y.sum(); neg_count = len(y) - pos_count
+    pos_weight = torch.tensor([neg_count / pos_count], device=DEVICE)
+    crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    print(f"pos_weight={pos_weight.item():.2f} (neg={neg_count}, pos={int(pos_count)})")
 
     for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y)):
         print(f"\n--- Fold {fold+1}/{N_FOLDS} ---")

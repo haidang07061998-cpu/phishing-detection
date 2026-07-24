@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.models.full_model import PhishingDetector, load_checkpoint
 from src.features.url_extractor import extract_url_features
 from src.features.html_dom_extractor import extract_html_features
+from src.brand_detection import get_brand_risk_score
 
 PROJECT = Path(__file__).resolve().parents[1]
 MODEL_DIR = PROJECT / "data" / "models"
@@ -73,12 +74,21 @@ class PhishingPredictor:
             )
             prob = torch.sigmoid(logits).item()
 
+        brand_info = get_brand_risk_score(url, clean_text)
+
         return {
             "url": url,
             "phishing_probability": round(prob, 4),
             "is_phishing": prob >= 0.5,
             "html_provided": html_content is not None,
+            "brand_analysis": brand_info,
+            "features": self._get_feature_summary(tab_vec),
         }
+
+    def _get_feature_summary(self, tab_vec: np.ndarray) -> dict:
+        keys = FEATURE_KEYS
+        values = tab_vec.tolist()
+        return {k: round(v, 4) for k, v in zip(keys, values)}
 
     def _extract_tabular(self, url: str) -> np.ndarray:
         feats = extract_url_features(url)

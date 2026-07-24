@@ -1,6 +1,17 @@
 """
 Baseline 2 - TabTransformer on Mendeley URL features (12-dim + padding to 29).
 Matches kaggle_baseline2.ipynb logic for local training.
+
+Padding rationale: TabTransformer expects TABULAR_DIM=29 (same architecture as
+Baseline 1 on ISCX). Since Mendeley only has 12 URL features (no DNS/WHOIS/SSL
+at inference time), we pad the remaining 17 dimensions with -1.0 so the same
+TabTransformer class can be reused without modification. The Transformer
+attention can learn to ignore constant padded dimensions.
+
+NOTE: Baseline 2 uses 5-fold CV, while the Proposed model uses 3-fold CV
+(due to Kaggle GPU quotas). This means direct fold-count comparisons between
+models are not equivalent — the Proposed model's variance estimates are based
+on fewer folds.
 """
 
 import os, sys, json, re, math
@@ -139,7 +150,10 @@ def main():
 
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
     all_metrics = []
-    crit = nn.BCEWithLogitsLoss()
+    pos_count = y.sum(); neg_count = len(y) - pos_count
+    pos_weight = torch.tensor([neg_count / pos_count], device=DEVICE)
+    crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    print(f"pos_weight={pos_weight.item():.2f} (neg={neg_count}, pos={int(pos_count)})")
 
     for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y)):
         print(f"\n--- Fold {fold+1}/{N_FOLDS} ---")

@@ -52,9 +52,24 @@ phishing-detection/
 │   │   ├── train_baseline2.py
 │   │   └── train_proposed.py
 │   ├── evaluation/
-│   │   └── evaluate.py     # Evaluate all 3 models, save JSONs
+│   │   ├── evaluate.py           # Evaluate all 3 models, save JSONs
+│   │   ├── generate_figures.py   # Generate evaluation figures
+│   │   └── deep_analysis.py      # Deep analysis Proposed vs Baselines
+│   ├── explainability/
+│   │   └── shap_analysis.py    # SHAP feature importance
+│   ├── brand_detection/
+│   │   └── __init__.py         # Brand impersonation detection
 │   ├── preprocess_iscx.py      # ISCX → 29 features
 │   └── preprocess_mendeley.py  # Mendeley → URL features + DOM + text
+├── docs/
+│   └── architecture_diagrams.md  # SE diagrams (UC, Sequence, ERD)
+├── docker/
+│   ├── Dockerfile.api
+│   └── Dockerfile.frontend
+├── docker-compose.yml        # Docker compose
+├── results/
+│   └── figures/              # Generated charts and figures
+├── README.md                 # Project documentation
 ├── kaggle_baseline1.ipynb   # Kaggle: TabTransformer on ISCX (29 feats)
 ├── kaggle_baseline2.ipynb   # Kaggle: TabTransformer on Mendeley URL (12→29 pad)
 ├── kaggle_proposed.ipynb    # Kaggle: Gated Fusion (URL + ModernBERT + DOM)
@@ -115,3 +130,29 @@ All models return raw logits from `forward()`. `torch.sigmoid()` is applied only
 6. ChainedScheduler (warmup + cosine)
 7. Gradient clipping at 0.5 + GradScaler
 8. Per-fold feature normalization to prevent data leakage
+
+## New Commands
+```bash
+# Generate SHAP analysis
+$env:PYTHONIOENCODING='utf-8'; python -m src.explainability.shap_analysis
+# Generate evaluation figures
+$env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.generate_figures
+# Run deep analysis
+$env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.deep_analysis
+# Test brand detection
+$env:PYTHONIOENCODING='utf-8'; python -m src.brand_detection
+# Docker compose
+docker-compose up --build
+```
+
+## New Modules
+- **explainability/** - SHAP DeepExplainer for TabTransformer models
+- **brand_detection/** - Brand impersonation detection via URL + text matching
+- **evaluation/generate_figures.py** - matplotlib/seaborn charts
+- **evaluation/deep_analysis.py** - Per-class metrics + error analysis
+
+## Class Imbalance
+All training scripts now use `pos_weight` in `BCEWithLogitsLoss`
+
+## CV note
+3-fold (Proposed) vs 5-fold (Baselines) explained in code docstrings

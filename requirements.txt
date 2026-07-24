@@ -1,0 +1,30 @@
+# Core
+torch>=2.3.0
+numpy
+pandas
+scikit-learn
+
+# NLP
+transformers>=4.40.0
+
+# Web scraping
+beautifulsoup4
+lxml
+requests
+dnspython
+python-whois
+cryptography
+
+# Visualization
+matplotlib
+seaborn
+
+# API
+flask
+flask-cors
+
+# Explainability
+shap
+
+# Utilities
+tqdm
