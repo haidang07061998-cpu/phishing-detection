@@ -1,3 +1,6 @@
+import re
+from urllib.parse import urlparse
+import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -5,6 +8,20 @@ from api.predictor import predictor
 
 app = Flask(__name__)
 CORS(app)
+
+predictor_lock = threading.Lock()
+MAX_BATCH_SIZE = 50
+
+
+def validate_url(url: str) -> str | None:
+    if not url or not url.strip():
+        return "URL cannot be empty"
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("http", "https"):
+        return "URL must start with http:// or https://"
+    if not parsed.netloc:
+        return "Invalid URL: missing domain"
+    return None
 
 
 @app.route("/health", methods=["GET"])
@@ -19,13 +36,16 @@ def predict():
         return jsonify({"error": "Missing 'url' in request body"}), 400
 
     url = data["url"].strip()
+    err = validate_url(url)
+    if err:
+        return jsonify({"error": err}), 400
+
     html_content = data.get("html", None)
 
-    if not url:
-        return jsonify({"error": "URL cannot be empty"}), 400
-
     try:
-        result = predictor.predict(url, html_content)
+        timeout = request.args.get("timeout", default=120, type=int)
+        with predictor_lock:
+            result = predictor.predict(url, html_content)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -40,11 +60,14 @@ def predict_batch():
     urls = data["urls"]
     if not isinstance(urls, list) or len(urls) == 0:
         return jsonify({"error": "'urls' must be a non-empty list"}), 400
+    if len(urls) > MAX_BATCH_SIZE:
+        return jsonify({"error": f"Batch size cannot exceed {MAX_BATCH_SIZE}"}), 400
 
     results = []
     for url in urls:
         try:
-            results.append(predictor.predict(url.strip()))
+            with predictor_lock:
+                results.append(predictor.predict(url.strip()))
         except Exception as e:
             results.append({"url": url, "error": str(e)})
 

@@ -43,3 +43,12 @@ api/__pycache__/
 # Training logs
 logs/
 *.log
+
+# Runtime logs
+api_err*.txt
+api_log*.txt
+pred_result*.txt
+
+# Debug scripts
+_check_*.py
+_debug_*.py

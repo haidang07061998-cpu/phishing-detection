@@ -21,7 +21,10 @@ function ResultCard({ result }) {
   }
 
   const barWidth = `${pct}%`
-  const features = result.features || result.top_features || []
+  const rawFeatures = result.features || result.top_features || {}
+  const features = Array.isArray(rawFeatures)
+    ? rawFeatures
+    : Object.entries(rawFeatures).map(([name, value]) => ({ name, value }))
 
   return (
     <div style={{
