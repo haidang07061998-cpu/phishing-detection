@@ -1,0 +1,142 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907466.187588   15476 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907476.847256   15476 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.59:5000
+Press CTRL+C to quit
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907547.828270   21468 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907561.755047   21468 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+127.0.0.1 - - [24/Jul/2026 22:39:39] "GET / HTTP/1.1" 404 -
+127.0.0.1 - - [24/Jul/2026 22:39:39] "GET /favicon.ico HTTP/1.1" 404 -
+ * Detected change in 'C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\slicer\\__init__.py', reloading
+Exception in thread Thread-2 (serve_forever):
+Traceback (most recent call last):
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907871.140582    8644 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907884.848972    8644 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+ * Detected change in 'C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\pip\\_internal\\utils\\temp_dir.py', reloading
+ * Restarting with watchdog (windowsapi)
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.4.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "F:\Đồ án\phishing-detection\api\app.py", line 4, in <module>
+    from api.predictor import predictor
+  File "F:\Đồ án\phishing-detection\api\predictor.py", line 4, in <module>
+    import torch
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1382, in <module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 7, in <module>
+    import torch.nn.functional as F
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in <module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at ..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907935.147299   15536 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784907941.452942   15536 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+127.0.0.1 - - [24/Jul/2026 22:47:02] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [24/Jul/2026 22:47:57] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [24/Jul/2026 22:49:18] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [24/Jul/2026 22:54:30] "POST /predict HTTP/1.1" 500 -
+127.0.0.1 - - [24/Jul/2026 22:54:50] "POST /predict HTTP/1.1" 400 -
+127.0.0.1 - - [24/Jul/2026 22:55:00] "POST /predict HTTP/1.1" 400 -
+127.0.0.1 - - [24/Jul/2026 22:55:13] "POST /predict HTTP/1.1" 500 -
+ * Detected change in 'C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\~.mpy\\conftest.py', reloading
+Exception in thread Thread-2 (serve_forever):
+Traceback (most recent call last):
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784908796.029241   18232 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784908800.945690   18232 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+127.0.0.1 - - [24/Jul/2026 23:03:30] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [24/Jul/2026 23:07:22] "OPTIONS /predict HTTP/1.1" 200 -
+127.0.0.1 - - [24/Jul/2026 23:07:30] "POST /predict HTTP/1.1" 200 -
+ * Detected change in 'F:\\Đồ án\\phishing-detection\\api\\predictor.py', reloading
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909617.954240   22864 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909623.140753   22864 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+ * Detected change in 'C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\torch\\_inductor\\test_operators.py', reloading
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909656.551147   15020 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909666.268052   15020 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+ * Detected change in 'F:\\Đồ án\\phishing-detection\\_debug_pred.py', reloading
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909803.683915    6448 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909829.907892    6448 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+ * Detected change in 'C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\torch\\nn\\modules\\module.py', reloading
+Exception in thread Thread-2 (serve_forever):
+Traceback (most recent call last):
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909985.529827   18144 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784909993.106157   18144 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+ * Detected change in 'F:\\Đồ án\\phishing-detection\\src\\models\\tab_transformer.py', reloading
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784910361.197719    3884 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784910367.004597    3884 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+ * Detected change in 'F:\\Đồ án\\phishing-detection\\src\\training\\train_baseline1.py', reloading
+ * Restarting with watchdog (windowsapi)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784910729.634657   16756 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784910736.978048   16756 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+ * Debugger is active!
+ * Debugger PIN: 140-824-514
+ * Detected change in 'F:\\Đồ án\\phishing-detection\\_check_gh.py', reloading
+Exception in thread Thread-2 (serve_forever):
+Traceback (most recent call last):
+  File "C:\Users\Lenovo\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+ * Restarting with watchdog (windowsapi)
