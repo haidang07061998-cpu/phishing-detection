@@ -52,3 +52,4 @@ pred_result*.txt
 # Debug scripts
 _check_*.py
 _debug_*.py
+_test_*.py
