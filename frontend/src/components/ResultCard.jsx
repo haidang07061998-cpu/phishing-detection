@@ -124,7 +124,7 @@ function ResultCard({ result }) {
         </div>
       )}
 
-      {result.brand && (
+      {result.brand_analysis?.has_brand_impersonation && (
         <div style={{
           marginBottom: '0.75rem', padding: '0.5rem 0.75rem',
           borderRadius: '8px', background: '#0f172a',
@@ -132,7 +132,10 @@ function ResultCard({ result }) {
         }}>
           <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: '0 0 0.25rem' }}>Brand Detected</p>
           <p style={{ margin: 0, color: '#f1f5f9', fontWeight: 600 }}>
-            {result.brand.name || result.brand}
+            {result.brand_analysis.brands_detected?.join(', ') || 'Impersonation detected'}
+          </p>
+          <p style={{ margin: '0.25rem 0 0', color: '#94a3b8', fontSize: '0.8rem' }}>
+            Risk score: {result.brand_analysis.risk_score?.toFixed(2) || 'N/A'}
           </p>
         </div>
       )}

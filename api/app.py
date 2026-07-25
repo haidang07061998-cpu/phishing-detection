@@ -43,7 +43,6 @@ def predict():
     html_content = data.get("html", None)
 
     try:
-        timeout = request.args.get("timeout", default=120, type=int)
         with predictor_lock:
             result = predictor.predict(url, html_content)
         return jsonify(result)
