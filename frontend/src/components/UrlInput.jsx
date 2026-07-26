@@ -11,6 +11,7 @@ function UrlInput({ onPredict, loading }) {
   const [url, setUrl] = useState('')
   const [htmlFile, setHtmlFile] = useState(null)
   const [fileName, setFileName] = useState('')
+  const [showHtmlUpload, setShowHtmlUpload] = useState(false)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -38,110 +39,167 @@ function UrlInput({ onPredict, loading }) {
 
   return (
     <form onSubmit={handleSubmit} style={{
-      background: '#1e293b',
-      borderRadius: '12px',
-      padding: '1.5rem',
-      maxWidth: '600px',
       width: '100%',
-      border: '1px solid #334155',
+      maxWidth: '800px',
     }}>
-      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#94a3b8', fontSize: '0.9rem' }}>
-        URL TO ANALYZE
-      </label>
-      <input
-        type="text"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder="https://example.com — paste any URL to scan"
-        style={{
-          width: '100%',
-          padding: '0.75rem',
-          borderRadius: '8px',
-          border: '1px solid #475569',
-          background: '#0f172a',
-          color: '#e2e8f0',
-          fontSize: '1rem',
-          outline: 'none',
-          boxSizing: 'border-box',
-        }}
-      />
-
-      <div style={{ marginTop: '0.75rem' }}>
-        <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0 0 0.35rem' }}>Quick examples</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-          {EXAMPLE_URLS.map((ex, i) => (
-            <button key={i} type="button" onClick={() => pickExample(ex)} style={{
-              background: '#0f172a', border: '1px solid #334155', color: '#94a3b8',
-              borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.75rem',
-              cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'monospace',
-            }}>
-              {ex}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <label style={{
-        display: 'block',
-        marginTop: '1rem',
-        marginBottom: '0.5rem',
-        fontWeight: 600,
-        color: '#94a3b8',
-        fontSize: '0.9rem',
-      }}>
-        HTML CONTENT (optional)
-      </label>
+      {/* Search Bar */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '0.5rem',
-        padding: '0.5rem 0.75rem', borderRadius: '8px',
-        border: '1px solid #475569', background: '#0f172a',
+        display: 'flex',
+        gap: '0',
+        background: '#131b2a',
+        borderRadius: '12px',
+        border: '1px solid #1e2a45',
+        overflow: 'hidden',
+        transition: 'border-color 0.15s',
       }}>
         <input
-          type="file"
-          accept=".html,.htm"
-          onChange={handleFileChange}
-          id="html-upload"
-          style={{ display: 'none' }}
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="Enter a URL to scan — paste any suspicious link"
+          style={{
+            flex: 1,
+            padding: '0.85rem 1rem',
+            border: 'none',
+            background: 'transparent',
+            color: '#fff',
+            fontSize: '0.95rem',
+            outline: 'none',
+          }}
         />
-        <label htmlFor="html-upload" style={{
-          padding: '0.4rem 0.75rem', borderRadius: '6px',
-          background: '#334155', color: '#e2e8f0', fontSize: '0.8rem',
-          cursor: 'pointer', flexShrink: 0,
-        }}>
-          Choose File
-        </label>
-        <span style={{ color: fileName ? '#e2e8f0' : '#64748b', fontSize: '0.85rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {fileName || 'No file selected'}
-        </span>
-        {fileName && (
-          <button type="button" onClick={clearFile} style={{
-            background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
-            fontSize: '1rem', padding: '0 0.25rem',
-          }}>
-            ✕
-          </button>
-        )}
+        <button
+          type="submit"
+          disabled={loading || !url.trim()}
+          style={{
+            padding: '0.85rem 1.5rem',
+            border: 'none',
+            background: loading ? '#1e2a45' : '#3b82f6',
+            color: loading ? '#64748b' : '#fff',
+            fontSize: '0.9rem',
+            fontWeight: 700,
+            cursor: loading || !url.trim() ? 'not-allowed' : 'pointer',
+            transition: 'background 0.15s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+          }}
+        >
+          {loading ? (
+            <>
+              <div style={{
+                width: '14px', height: '14px', border: '2px solid #64748b',
+                borderTop: '2px solid #94a3b8', borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+              SCANNING
+            </>
+          ) : (
+            <>
+              SCAN
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M4 8h8M8 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </>
+          )}
+        </button>
       </div>
 
-      <button
-        type="submit"
-        disabled={loading || !url.trim()}
-        style={{
-          width: '100%',
-          marginTop: '1rem',
-          padding: '0.75rem',
-          borderRadius: '8px',
-          border: 'none',
-          background: loading ? '#475569' : 'linear-gradient(90deg, #38bdf8, #818cf8)',
-          color: loading ? '#94a3b8' : '#0f172a',
-          fontSize: '1rem',
-          fontWeight: 600,
-          cursor: loading || !url.trim() ? 'not-allowed' : 'pointer',
-          transition: 'opacity 0.2s',
-        }}
-      >
-        {loading ? 'ANALYZING...' : 'ANALYZE URL'}
-      </button>
+      {/* Quick Actions */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '0.5rem',
+        marginTop: '1rem',
+      }}>
+        {EXAMPLE_URLS.map((ex, i) => (
+          <button key={i} type="button" onClick={() => pickExample(ex)} style={{
+            background: '#131b2a',
+            border: '1px solid #1e2a45',
+            color: '#8892b0',
+            borderRadius: '999px',
+            padding: '0.3rem 0.75rem',
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            transition: 'all 0.15s',
+          }}>
+            {ex}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setShowHtmlUpload(!showHtmlUpload)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: showHtmlUpload ? '#3b82f6' : '#64748b',
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            padding: '0.3rem 0.5rem',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          + HTML file
+        </button>
+      </div>
+
+      {/* Collapsible HTML Upload */}
+      {showHtmlUpload && (
+        <div style={{
+          marginTop: '0.75rem',
+          padding: '0.75rem 1rem',
+          borderRadius: '10px',
+          background: '#131b2a',
+          border: '1px solid #1e2a45',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+        }}>
+          <input
+            type="file"
+            accept=".html,.htm"
+            onChange={handleFileChange}
+            id="html-upload"
+            style={{ display: 'none' }}
+          />
+          <label htmlFor="html-upload" style={{
+            padding: '0.4rem 0.85rem',
+            borderRadius: '6px',
+            background: '#1e2a45',
+            color: '#c4d1ec',
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            flexShrink: 0,
+            border: '1px solid #2a3a52',
+          }}>
+            Choose File
+          </label>
+          <span style={{
+            color: fileName ? '#c4d1ec' : '#64748b',
+            fontSize: '0.85rem',
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {fileName || 'No file selected — upload an HTML page for deeper analysis'}
+          </span>
+          {fileName && (
+            <button type="button" onClick={clearFile} style={{
+              background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+              fontSize: '1rem', padding: '0 0.25rem',
+            }}>
+              {'\u2717'}
+            </button>
+          )}
+        </div>
+      )}
     </form>
   )
 }
