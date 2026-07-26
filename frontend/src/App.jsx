@@ -25,7 +25,7 @@ function App() {
       if (!res.ok) throw new Error(data.error || `Server error (${res.status})`)
       setResult(data)
       setHistory(prev => [
-        { url, time: new Date().toLocaleTimeString(), phishing: data.phishing_probability >= 0.5 },
+        { url, time: new Date().toLocaleTimeString(), phishing: data.phishing_probability >= 0.5, prob: data.phishing_probability * 100 },
         ...prev,
       ].slice(0, 10))
     } catch (err) {
@@ -112,15 +112,15 @@ function App() {
       {/* Hero */}
       <main style={{
         width: '100%',
-        maxWidth: '960px',
+        maxWidth: '1100px',
         padding: '3rem 1.5rem 2rem',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
       }}>
         <h1 style={{
-          fontSize: '2.5rem',
-          fontWeight: 700,
+          fontSize: '2rem',
+          fontWeight: 600,
           color: '#fff',
           margin: '0 0 0.35rem',
           textAlign: 'center',
@@ -193,7 +193,13 @@ function App() {
                   <span style={{ color: '#c4d1ec', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                     {h.url}
                   </span>
-                  <span style={{ color: '#64748b', flexShrink: 0, marginLeft: '0.5rem', fontSize: '0.75rem' }}>{h.time}</span>
+                  <span style={{
+                    color: h.phishing ? '#ef4444' : '#10b981', fontWeight: 600,
+                    flexShrink: 0, margin: '0 0.5rem', fontSize: '0.75rem', minWidth: '42px', textAlign: 'right',
+                  }}>
+                    {h.prob != null ? `${h.prob.toFixed(0)}%` : ''}
+                  </span>
+                  <span style={{ color: '#64748b', flexShrink: 0, fontSize: '0.75rem' }}>{h.time}</span>
                 </div>
               ))}
             </div>
@@ -210,7 +216,7 @@ function App() {
         marginTop: 'auto',
       }}>
         <div style={{
-          maxWidth: '960px',
+          maxWidth: '1100px',
           margin: '0 auto',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',

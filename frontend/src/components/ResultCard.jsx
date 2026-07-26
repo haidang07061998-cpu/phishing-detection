@@ -148,16 +148,18 @@ function ResultCard({ result }) {
   const brand = result.brand_analysis
 
   return (
+    const scanTime = new Date().toLocaleString()
+
     <div style={{
       width: '100%',
       maxWidth: '800px',
       marginTop: '1.5rem',
       borderRadius: '12px',
       overflow: 'hidden',
-      border: `1px solid ${barColor}44`,
+      boxShadow: `0 0 0 1px ${barColor}44`,
     }}>
       {/* Dynamic Top Strip */}
-      <div style={{ height: '4px', background: barColor }} />
+      <div style={{ height: '5px', background: `linear-gradient(90deg, ${barColor}, ${barColor}88)` }} />
 
       <div style={{ background: '#131b2a', padding: '1.5rem' }}>
         {/* Header */}
@@ -323,13 +325,15 @@ function ResultCard({ result }) {
                   {[
                     { label: 'AI Confidence', value: `${pct}%`, color: barColor },
                     { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : '#64748b' },
+                    { label: 'Features Extracted', value: `${features.length} signals`, color: '#c4d1ec' },
                     { label: 'Model', value: 'Gated Fusion v2', color: '#c4d1ec' },
+                    { label: 'Scan Time', value: scanTime, color: '#64748b' },
                   ].map((row, i) => (
                     <tr key={i}>
-                      <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', color: '#64748b', borderBottom: i < 2 ? '1px solid #1e2a45' : 'none' }}>
+                      <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', color: '#64748b', borderBottom: i < 4 ? '1px solid #1e2a45' : 'none' }}>
                         {row.label}
                       </td>
-                      <td style={{ padding: '0.3rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 2 ? '1px solid #1e2a45' : 'none' }}>
+                      <td style={{ padding: '0.3rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 4 ? '1px solid #1e2a45' : 'none' }}>
                         {row.value}
                       </td>
                     </tr>

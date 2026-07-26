@@ -1,10 +1,10 @@
 import { useState } from 'react'
 
 const EXAMPLE_URLS = [
-  'https://google.com',
-  'https://paypa1.secure-login.com/verify',
-  'https://facebook.com/login',
-  'http://free-prize-winner.xyz/claim',
+  { url: 'https://google.com', label: 'google.com' },
+  { url: 'https://paypa1.secure-login.com/verify', label: 'paypa1.secure-login.com/verify' },
+  { url: 'https://facebook.com/login', label: 'facebook.com/login' },
+  { url: 'http://free-prize-winner.xyz/claim', label: 'free-prize-winner.xyz/claim' },
 ]
 
 function UrlInput({ onPredict, loading }) {
@@ -28,8 +28,8 @@ function UrlInput({ onPredict, loading }) {
     reader.readAsText(file)
   }
 
-  const pickExample = (exampleUrl) => {
-    setUrl(exampleUrl)
+  const pickExample = (ex) => {
+    setUrl(ex.url)
   }
 
   const clearFile = () => {
@@ -124,7 +124,7 @@ function UrlInput({ onPredict, loading }) {
             fontFamily: 'monospace',
             transition: 'all 0.15s',
           }}>
-            {ex}
+            {ex.label}
           </button>
         ))}
         <button
