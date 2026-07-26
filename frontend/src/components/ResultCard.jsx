@@ -146,10 +146,9 @@ function ResultCard({ result }) {
     .sort((a, b) => FEATURE_IMPORTANCE.indexOf(a.name) - FEATURE_IMPORTANCE.indexOf(b.name))
 
   const brand = result.brand_analysis
+  const scanTime = new Date().toLocaleString()
 
   return (
-    const scanTime = new Date().toLocaleString()
-
     <div style={{
       width: '100%',
       maxWidth: '800px',
