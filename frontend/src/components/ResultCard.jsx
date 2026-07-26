@@ -141,6 +141,24 @@ function formatSignalRisk(key, value) {
   return false
 }
 
+function Gauge({ value }) {
+  const pct = Math.min(Math.max(value * 100, 0), 100)
+  const r = 54, cx = 70, cy = 64, stroke = 8
+  const circ = 2 * Math.PI * r
+  const offset = circ * (1 - pct / 100)
+  const color = pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981'
+  const label = pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE'
+  return (
+    <svg width="140" height="90" viewBox="0 0 140 90" style={{ display: 'block', margin: '0 auto' }}>
+      <path d="M16 84 A 54 54 0 0 1 124 84" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
+      <path d="M16 84 A 54 54 0 0 1 124 84" fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+      <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="22" fontWeight="bold">{pct.toFixed(0)}%</text>
+      <text x={cx} y={cy + 16} textAnchor="middle" fill={color} fontSize="9" fontWeight="700">{label}</text>
+    </svg>
+  )
+}
+
 function ProgressBar({ value, color, height = '20px', showLabel = true }) {
   const pct = Math.min(Math.max(value * 100, 0), 100).toFixed(1)
   return (
@@ -176,6 +194,45 @@ function Badge({ children, color, bg }) {
   )
 }
 
+function FeatureImportanceChart({ importance }) {
+  if (!importance || Object.keys(importance).length === 0) return null
+  const entries = Object.entries(importance)
+    .map(([name, val]) => ({ name, val, abs: Math.abs(val) }))
+    .sort((a, b) => b.abs - a.abs)
+    .slice(0, 8)
+  const maxAbs = Math.max(...entries.map(e => e.abs), 0.001)
+  return (
+    <div style={{ marginTop: '1rem' }}>
+      <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+        Feature Impact on Prediction
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+        {entries.map(({ name, val }) => {
+          const label = FEATURE_LABELS[name] || name
+          const pct = Math.abs(val) / maxAbs * 100
+          const isPositive = val > 0
+          return (
+            <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ color: '#8892b0', fontSize: '0.72rem', minWidth: '100px', textAlign: 'right', flexShrink: 0 }}>{label}</span>
+              <div style={{ flex: 1, height: '16px', background: '#0b0f19', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                <div style={{
+                  width: `${pct}%`, height: '100%',
+                  background: isPositive ? '#ef4444' : '#10b981',
+                  borderRadius: '4px', float: isPositive ? 'left' : 'right',
+                  opacity: 0.8, transition: 'width 0.4s ease',
+                }} />
+              </div>
+              <span style={{ color: isPositive ? '#ef4444' : '#10b981', fontSize: '0.72rem', fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>
+                {val.toFixed(3)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function TooltipIcon({ text }) {
   return (
     <span style={{
@@ -201,9 +258,40 @@ function TabButton({ active, onClick, children }) {
   )
 }
 
-function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime }) {
+function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance, confidence }) {
   return (
     <>
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem' }}>
+        <div style={{ flexShrink: 0 }}>
+          <Gauge value={confidence} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            {features.slice(0, 6).map((f, i) => {
+              const label = FEATURE_LABELS[f.name] || f.name
+              const tooltip = FEATURE_TOOLTIPS[f.name] || ''
+              const formatted = formatFeatureValue(f.name, f.value)
+              const isRisk = getFeatureRisk(f.name, f.value)
+              return (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '0.3rem 0.5rem', borderRadius: '6px',
+                  background: isRisk ? '#2a1515' : '#0b0f19',
+                }}>
+                  <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
+                    {label}
+                    {tooltip && <TooltipIcon text={tooltip} />}
+                  </span>
+                  <Badge color={isRisk ? '#ef4444' : '#10b981'} bg={isRisk ? '#2a1515' : '#142a15'}>
+                    {formatted}
+                  </Badge>
+                </div>
+              )
+            })}
+          </div>
+          {importance && <FeatureImportanceChart importance={importance} />}
+        </div>
+      </div>
       <div style={{
         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem',
       }}>
@@ -511,19 +599,6 @@ function ResultCard({ result }) {
           </div>
         )}
 
-        <div style={{ marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-            <span style={{ color: '#8892b0', fontSize: '0.8rem' }}>Phishing Probability</span>
-            <span style={{ color: barColor, fontWeight: 700, fontSize: '0.9rem' }}>{pct}%</span>
-          </div>
-          <ProgressBar value={confidence} color={barColor} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem' }}>
-            <span style={{ color: '#10b981', fontSize: '0.7rem' }}>Safe</span>
-            <span style={{ color: '#eab308', fontSize: '0.7rem' }}>Suspicious</span>
-            <span style={{ color: '#ef4444', fontSize: '0.7rem' }}>Phishing</span>
-          </div>
-        </div>
-
         <div style={{
           display: 'flex', gap: '0.25rem', background: '#1a2332',
           borderRadius: '8px', padding: '2px', marginBottom: '1rem',
@@ -533,7 +608,7 @@ function ResultCard({ result }) {
           <TabButton active={tab === 'behavior'} onClick={() => setTab('behavior')}>Behavior</TabButton>
         </div>
 
-        {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime }} />}
+        {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance: result.feature_importance, confidence }} />}
         {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} />}
         {tab === 'behavior' && <BehaviorTab domSignals={domSignals} features={features} />}
       </div>
