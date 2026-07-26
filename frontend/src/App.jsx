@@ -239,7 +239,7 @@ function App() {
       </main>
 
       {/* Stats Footer */}
-      <footer style={{
+      {!result && <footer style={{
         width: '100%',
         borderTop: '1px solid #1e2a45',
         background: '#0d1117',
@@ -290,7 +290,7 @@ function App() {
             </p>
           </div>
         </div>
-      </footer>
+      </footer>}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

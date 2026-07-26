@@ -143,18 +143,18 @@ function formatSignalRisk(key, value) {
 
 function Gauge({ value }) {
   const pct = Math.min(Math.max(value * 100, 0), 100)
-  const r = 54, cx = 70, cy = 64, stroke = 8
+  const r = 72, cx = 88, cy = 82, stroke = 10
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - pct / 100)
   const color = pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981'
   const label = pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE'
   return (
-    <svg width="140" height="90" viewBox="0 0 140 90" style={{ display: 'block', margin: '0 auto' }}>
-      <path d="M16 84 A 54 54 0 0 1 124 84" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
-      <path d="M16 84 A 54 54 0 0 1 124 84" fill="none" stroke={color} strokeWidth={stroke}
+    <svg width="176" height="112" viewBox="0 0 176 112" style={{ display: 'block', margin: '0 auto' }}>
+      <path d="M16 106 A 72 72 0 0 1 160 106" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
+      <path d="M16 106 A 72 72 0 0 1 160 106" fill="none" stroke={color} strokeWidth={stroke}
         strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
-      <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="22" fontWeight="bold">{pct.toFixed(0)}%</text>
-      <text x={cx} y={cy + 16} textAnchor="middle" fill={color} fontSize="9" fontWeight="700">{label}</text>
+      <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="28" fontWeight="bold">{pct.toFixed(0)}%</text>
+      <text x={cx} y={cy + 20} textAnchor="middle" fill={color} fontSize="11" fontWeight="700">{label}</text>
     </svg>
   )
 }
@@ -261,34 +261,11 @@ function TabButton({ active, onClick, children }) {
 function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance, confidence }) {
   return (
     <>
-      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', alignItems: 'flex-start' }}>
         <div style={{ flexShrink: 0 }}>
           <Gauge value={confidence} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-            {features.slice(0, 6).map((f, i) => {
-              const label = FEATURE_LABELS[f.name] || f.name
-              const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const formatted = formatFeatureValue(f.name, f.value)
-              const isRisk = getFeatureRisk(f.name, f.value)
-              return (
-                <div key={i} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '0.3rem 0.5rem', borderRadius: '6px',
-                  background: isRisk ? '#2a1515' : '#0b0f19',
-                }}>
-                  <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
-                    {label}
-                    {tooltip && <TooltipIcon text={tooltip} />}
-                  </span>
-                  <Badge color={isRisk ? '#ef4444' : '#10b981'} bg={isRisk ? '#2a1515' : '#142a15'}>
-                    {formatted}
-                  </Badge>
-                </div>
-              )
-            })}
-          </div>
           {importance && <FeatureImportanceChart importance={importance} />}
         </div>
       </div>
