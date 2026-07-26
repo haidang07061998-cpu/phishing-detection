@@ -1,4 +1,5 @@
 import re
+import ipaddress
 from urllib.parse import urlparse
 import threading
 from flask import Flask, request, jsonify
@@ -21,6 +22,25 @@ def validate_url(url: str) -> str | None:
         return "URL must start with http:// or https://"
     if not parsed.netloc:
         return "Invalid URL: missing domain"
+    return None
+
+
+def validate_domain(domain: str) -> str | None:
+    if not domain or not domain.strip():
+        return "Domain cannot be empty"
+    domain = domain.strip().lower()
+    if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$", domain):
+        return "Invalid domain format (e.g. example.com)"
+    return None
+
+
+def validate_ip(ip: str) -> str | None:
+    if not ip or not ip.strip():
+        return "IP address cannot be empty"
+    try:
+        ipaddress.ip_address(ip.strip())
+    except ValueError:
+        return "Invalid IP address format (e.g. 8.8.8.8)"
     return None
 
 
@@ -71,6 +91,42 @@ def predict_batch():
             results.append({"url": url, "error": str(e)})
 
     return jsonify({"results": results, "count": len(results)})
+
+
+@app.route("/domain", methods=["POST"])
+def domain_lookup():
+    data = request.get_json(force=True)
+    if not data or "domain" not in data:
+        return jsonify({"error": "Missing 'domain' in request body"}), 400
+
+    domain = data["domain"].strip().lower()
+    err = validate_domain(domain)
+    if err:
+        return jsonify({"error": err}), 400
+
+    try:
+        result = predictor.lookup_domain(domain)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ip", methods=["POST"])
+def ip_lookup():
+    data = request.get_json(force=True)
+    if not data or "ip" not in data:
+        return jsonify({"error": "Missing 'ip' in request body"}), 400
+
+    ip = data["ip"].strip()
+    err = validate_ip(ip)
+    if err:
+        return jsonify({"error": err}), 400
+
+    try:
+        result = predictor.lookup_ip(ip)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

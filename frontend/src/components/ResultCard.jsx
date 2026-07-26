@@ -533,10 +533,60 @@ function BehaviorTab({ domSignals, features }) {
   )
 }
 
+function DomainResult({ result }) {
+  const dns = result.dns_whois
+  return (
+    <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px #3b82f644' }}>
+      <div style={{ height: '5px', background: 'linear-gradient(90deg, #3b82f6, #3b82f688)' }} />
+      <div style={{ background: '#131b2a', padding: '1.5rem' }}>
+        <div style={{ marginBottom: '1rem' }}>
+          <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Domain Lookup
+          </p>
+          <p style={{ margin: 0, color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}>
+            {result.domain}
+          </p>
+        </div>
+        <p style={{ color: '#8892b0', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+          DNS &amp; WHOIS records — no AI analysis (domain-only lookup)
+        </p>
+        <DetailsTab dns={dns} ssl={result.ssl_redirect} />
+      </div>
+    </div>
+  )
+}
+
+function IpResult({ result }) {
+  const dns = result.dns_whois
+  const ssl = result.ssl_redirect
+  return (
+    <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px #3b82f644' }}>
+      <div style={{ height: '5px', background: 'linear-gradient(90deg, #3b82f6, #3b82f688)' }} />
+      <div style={{ background: '#131b2a', padding: '1.5rem' }}>
+        <div style={{ marginBottom: '1rem' }}>
+          <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            IP Lookup
+          </p>
+          <p style={{ margin: 0, color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}>
+            {result.ip}
+          </p>
+        </div>
+        <p style={{ color: '#8892b0', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+          Reverse DNS &amp; WHOIS — no AI analysis (IP-only lookup)
+        </p>
+        <DetailsTab dns={dns} ssl={ssl} />
+      </div>
+    </div>
+  )
+}
+
 function ResultCard({ result }) {
   const [tab, setTab] = useState('overview')
 
   if (!result) return null
+
+  if (result.type === 'domain') return <DomainResult result={result} />
+  if (result.type === 'ip') return <IpResult result={result} />
 
   const confidence = result.phishing_probability
   const pct = (confidence * 100).toFixed(1)

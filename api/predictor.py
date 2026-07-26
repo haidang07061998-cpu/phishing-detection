@@ -234,5 +234,25 @@ class PhishingPredictor:
             "empty_links": int(dom_vec[18]),
         }
 
+    def lookup_domain(self, domain: str) -> dict:
+        url = f"https://{domain}"
+        dns_whois = self._extract_dns_whois(url)
+        return {
+            "domain": domain,
+            "dns_whois": dns_whois,
+            "type": "domain",
+        }
+
+    def lookup_ip(self, ip: str) -> dict:
+        url = f"http://{ip}"
+        dns_whois = self._extract_dns_whois(url)
+        ssl_redirect = self._extract_ssl_redirect(f"https://{ip}")
+        return {
+            "ip": ip,
+            "dns_whois": dns_whois,
+            "ssl_redirect": ssl_redirect,
+            "type": "ip",
+        }
+
 
 predictor = PhishingPredictor()

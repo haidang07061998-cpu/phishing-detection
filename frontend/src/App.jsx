@@ -11,21 +11,43 @@ function App() {
   const [history, setHistory] = useState([])
   const [activeTab, setActiveTab] = useState('url')
 
-  const handlePredict = async (url, htmlContent) => {
+  const TAB_CONFIG = {
+    url: {
+      endpoint: '/predict',
+      bodyKey: 'url',
+      bodyFn: (input, html) => ({ url: input, html: html || undefined }),
+      label: 'URL',
+    },
+    domain: {
+      endpoint: '/domain',
+      bodyKey: 'domain',
+      bodyFn: (input) => ({ domain: input }),
+      label: 'Domain',
+    },
+    'ip address': {
+      endpoint: '/ip',
+      bodyKey: 'ip',
+      bodyFn: (input) => ({ ip: input }),
+      label: 'IP',
+    },
+  }
+
+  const handlePredict = async (inputValue, htmlContent) => {
     setLoading(true)
     setError(null)
     setResult(null)
+    const cfg = TAB_CONFIG[activeTab]
     try {
-      const res = await fetch(`${API_URL}/predict`, {
+      const res = await fetch(`${API_URL}${cfg.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, html: htmlContent || undefined }),
+        body: JSON.stringify(cfg.bodyFn(inputValue, htmlContent)),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `Server error (${res.status})`)
       setResult(data)
       setHistory(prev => [
-        { url, time: new Date().toLocaleTimeString(), phishing: data.phishing_probability >= 0.5, prob: data.phishing_probability * 100 },
+        { url: inputValue, time: new Date().toLocaleTimeString(), phishing: data.phishing_probability >= 0.5, prob: data.phishing_probability ? data.phishing_probability * 100 : null },
         ...prev,
       ].slice(0, 10))
     } catch (err) {
@@ -126,7 +148,9 @@ function App() {
           margin: '0 0 0.35rem',
           textAlign: 'center',
         }}>
-          Analyze suspicious URLs
+          {activeTab === 'url' ? 'Analyze suspicious URLs' :
+           activeTab === 'domain' ? 'Domain Intelligence Lookup' :
+           'IP Address Reputation'}
         </h1>
         <p style={{
           color: '#8892b0',
@@ -134,10 +158,12 @@ function App() {
           margin: '0 0 2rem',
           textAlign: 'center',
         }}>
-          Powered by Gated Fusion AI &middot; TabTransformer + ModernBERT + DOM Analysis
+          {activeTab === 'url' ? 'Powered by Gated Fusion AI &middot; TabTransformer + ModernBERT + DOM Analysis' :
+           activeTab === 'domain' ? 'DNS records &middot; WHOIS data &middot; SSL certificate info' :
+           'Reverse DNS &middot; WHOIS lookup &middot; Network intelligence'}
         </p>
 
-        <UrlInput onPredict={handlePredict} loading={loading} />
+        <UrlInput onPredict={handlePredict} loading={loading} activeTab={activeTab} />
 
         {loading && (
           <div style={{
@@ -150,7 +176,11 @@ function App() {
               borderTop: '2px solid #3b82f6', borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
             }} />
-            <span style={{ color: '#8892b0', fontSize: '0.9rem' }}>Analyzing URL &mdash; running AI inference...</span>
+            <span style={{ color: '#8892b0', fontSize: '0.9rem' }}>
+              {activeTab === 'url' ? 'Analyzing URL &mdash; running AI inference...' :
+               activeTab === 'domain' ? 'Looking up domain DNS/WHOIS records...' :
+               'Looking up IP address information...'}
+            </span>
           </div>
         )}
 
