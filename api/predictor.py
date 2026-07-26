@@ -9,6 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.models.full_model import PhishingDetector, load_checkpoint
 from src.features.url_extractor import extract_url_features
 from src.features.html_dom_extractor import extract_html_features
+from src.features.dns_whois_extractor import extract_dns_whois_features
+from src.features.ssl_redirect_extractor import extract_ssl_redirect_features
 from src.brand_detection import get_brand_risk_score
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -112,6 +114,9 @@ class PhishingPredictor:
         brand_info = {"has_brand_impersonation": False, "brands_detected": [],
                       "max_confidence": 0.0, "risk_score": 0.0}
 
+        dns_whois = self._extract_dns_whois(url)
+        ssl_redirect = self._extract_ssl_redirect(url)
+
         reg_domain = _get_registered_domain(url)
         if reg_domain and reg_domain in WHITELIST_DOMAINS:
             brand_info = get_brand_risk_score(url, "")
@@ -123,6 +128,8 @@ class PhishingPredictor:
                 "brand_analysis": brand_info,
                 "features": self._get_feature_summary(self._extract_tabular(url)),
                 "whitelisted": True,
+                "dns_whois": dns_whois,
+                "ssl_redirect": ssl_redirect,
             }
 
         self.model.eval()
@@ -148,6 +155,7 @@ class PhishingPredictor:
             prob = torch.sigmoid(logits).item()
 
         brand_info = get_brand_risk_score(url, clean_text)
+        dom_signals = self._extract_dom_signals(dom_vec)
 
         return {
             "url": url,
@@ -157,6 +165,9 @@ class PhishingPredictor:
             "brand_analysis": brand_info,
             "features": self._get_feature_summary(tab_vec),
             "whitelisted": False,
+            "dns_whois": dns_whois,
+            "ssl_redirect": ssl_redirect,
+            "dom_signals": dom_signals,
         }
 
     def _get_feature_summary(self, tab_vec: np.ndarray) -> dict:
@@ -175,6 +186,42 @@ class PhishingPredictor:
             return extract_html_features(html, base_url)
         except Exception:
             return np.zeros(64, dtype=np.float32), ""
+
+    def _extract_dns_whois(self, url: str) -> dict:
+        try:
+            return extract_dns_whois_features(url)
+        except Exception:
+            return {"a_record_count": -1, "mx_record_count": -1,
+                    "ns_record_count": -1, "ttl": -1,
+                    "domain_age_days": -1, "registrar": "",
+                    "is_privacy_protected": -1, "country": ""}
+
+    def _extract_ssl_redirect(self, url: str) -> dict:
+        try:
+            return extract_ssl_redirect_features(url)
+        except Exception:
+            return {"ssl_valid": -1, "ssl_age_days": -1,
+                    "ssl_issuer_trusted": -1,
+                    "redirect_count": -1, "cross_domain_redirect": -1}
+
+    def _extract_dom_signals(self, dom_vec: np.ndarray) -> dict:
+        return {
+            "script_count": int(dom_vec[0]),
+            "iframe_count": int(dom_vec[1]),
+            "form_count": int(dom_vec[2]),
+            "input_count": int(dom_vec[3]),
+            "password_input": int(dom_vec[4]),
+            "button_count": int(dom_vec[5]),
+            "total_links": int(dom_vec[6]),
+            "external_scripts": int(dom_vec[7]),
+            "external_link_ratio": round(float(dom_vec[8]), 4),
+            "hidden_elements": int(dom_vec[13]),
+            "meta_refresh": int(dom_vec[14]),
+            "eval_count": int(dom_vec[15]),
+            "document_write": int(dom_vec[16]),
+            "suspicious_js": int(dom_vec[17]),
+            "empty_links": int(dom_vec[18]),
+        }
 
 
 predictor = PhishingPredictor()
