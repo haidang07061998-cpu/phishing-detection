@@ -43,7 +43,7 @@ function App() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
+      alignItems: 'stretch',
     }}>
       {/* Header */}
       <header style={{
