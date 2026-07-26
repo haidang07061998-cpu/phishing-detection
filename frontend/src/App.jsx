@@ -112,8 +112,8 @@ function App() {
       {/* Hero */}
       <main style={{
         width: '100%',
-        maxWidth: '1100px',
-        margin: '0 auto',
+          maxWidth: '1200px',
+          margin: '0 auto',
         padding: '3rem 1.5rem 2rem',
         display: 'flex',
         flexDirection: 'column',
@@ -143,7 +143,7 @@ function App() {
           <div style={{
             marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
             background: '#131b2a', borderRadius: '12px', padding: '1.25rem 1.5rem',
-            maxWidth: '800px', width: '100%', border: '1px solid #1e2a45',
+            width: '100%', border: '1px solid #1e2a45',
           }}>
             <div style={{
               width: '20px', height: '20px', border: '2px solid #2a3a52',
@@ -157,7 +157,7 @@ function App() {
         {error && (
           <div style={{
             background: '#2a1515', border: '1px solid #ef4444', borderRadius: '10px',
-            padding: '1rem 1.25rem', maxWidth: '800px', width: '100%', marginTop: '1rem',
+            padding: '1rem 1.25rem', width: '100%', marginTop: '1rem',
           }}>
             <p style={{ margin: 0, fontWeight: 600, color: '#fca5a5', fontSize: '0.9rem' }}>Error</p>
             <p style={{ margin: '0.25rem 0 0', color: '#fca5a5', fontSize: '0.85rem' }}>{error}</p>
@@ -169,7 +169,7 @@ function App() {
         {/* History */}
         {history.length > 0 && (
           <div style={{
-            marginTop: '1.5rem', maxWidth: '800px', width: '100%',
+            marginTop: '1.5rem', width: '100%',
             background: '#131b2a', borderRadius: '12px', padding: '1.25rem',
             border: '1px solid #1e2a45',
           }}>
@@ -217,7 +217,7 @@ function App() {
         marginTop: 'auto',
       }}>
         <div style={{
-          maxWidth: '1100px',
+        maxWidth: '1200px',
           margin: '0 auto',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',

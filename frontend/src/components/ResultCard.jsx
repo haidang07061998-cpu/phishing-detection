@@ -151,7 +151,6 @@ function ResultCard({ result }) {
   return (
     <div style={{
       width: '100%',
-      maxWidth: '800px',
       marginTop: '1.5rem',
       borderRadius: '12px',
       overflow: 'hidden',

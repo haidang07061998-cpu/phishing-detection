@@ -40,7 +40,6 @@ function UrlInput({ onPredict, loading }) {
   return (
     <form onSubmit={handleSubmit} style={{
       width: '100%',
-      maxWidth: '800px',
     }}>
       {/* Search Bar */}
       <div style={{
