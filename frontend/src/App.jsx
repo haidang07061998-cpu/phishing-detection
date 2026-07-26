@@ -113,6 +113,7 @@ function App() {
       <main style={{
         width: '100%',
         maxWidth: '1100px',
+        margin: '0 auto',
         padding: '3rem 1.5rem 2rem',
         display: 'flex',
         flexDirection: 'column',
