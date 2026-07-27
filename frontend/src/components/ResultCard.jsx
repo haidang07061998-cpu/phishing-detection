@@ -1,5 +1,27 @@
 import { useState } from 'react'
 
+const WHITELIST_DOMAINS = [
+  'google.com', 'googleapis.com', 'googleusercontent.com',
+  'gmail.com', 'youtube.com', 'youtu.be', 'blogspot.com',
+  'google.vn',
+  'microsoft.com', 'office.com', 'office365.com',
+  'live.com', 'outlook.com', 'azure.com',
+  'github.com', 'githubusercontent.com',
+  'facebook.com', 'fb.com', 'fbcdn.net',
+  'instagram.com', 'whatsapp.com',
+  'apple.com', 'icloud.com',
+  'amazon.com', 'aws.amazon.com',
+  'twitter.com', 'x.com', 'linkedin.com',
+  'telegram.org', 'discord.com', 'slack.com',
+  'gitlab.com', 'bitbucket.org', 'npmjs.com',
+  'docker.com', 'stackoverflow.com',
+  'wikipedia.org', 'wikimedia.org',
+  'netflix.com', 'spotify.com', 'adobe.com',
+  'paypal.com', 'ebay.com',
+  'zoom.us', 'dropbox.com',
+  'cloudflare.com',
+]
+
 const FEATURE_LABELS = {
   url_length: 'URL Length',
   domain_length: 'Domain Length',
@@ -152,7 +174,9 @@ function getDetailColor(key, value, extra) {
   if (key === 'redirect_count') return value > 4 ? '#ef4444' : value > 2 ? '#eab308' : '#c4d1ec'
   if (key === 'cross_domain_redirect') {
     if (value !== 1) return '#10b981'
-    return extra?.whitelisted ? '#c4d1ec' : '#ef4444'
+    const dest = extra?.finalUrl || ''
+    const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d))
+    return isKnown ? '#10b981' : '#ef4444'
   }
   if (key === 'is_privacy_protected') return '#8892b0'
   if (key === 'ttl') {
@@ -178,7 +202,9 @@ function getDetailBadge(key, value, extra) {
   }
   if (key === 'cross_domain_redirect') {
     if (value !== 1) return null
-    if (extra?.whitelisted) return { text: 'Yes (Whitelisted Destination)', color: '#10b981', bg: '#142a15' }
+    const dest = extra?.finalUrl || ''
+    const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d))
+    if (isKnown) return { text: 'Yes (Whitelisted Destination)', color: '#10b981', bg: '#142a15' }
     return { text: 'Yes (Unknown Destination)', color: '#ef4444', bg: '#2a1515' }
   }
   return null
@@ -541,7 +567,8 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
 
 function DetailsTab({ dns, ssl, whitelisted, result }) {
   const trustedCAOverride = result?.url ? /google\.com|youtube\.com|gmail\.com|github\.com|facebook\.com|microsoft\.com|apple\.com|amazon\.com/i.test(result.url) : false
-  const extra = { whitelisted, trustedCAOverride }
+  const finalUrl = ssl?.final_url || ''
+  const extra = { whitelisted, trustedCAOverride, finalUrl }
 
   if (!dns && !ssl) {
     return (
