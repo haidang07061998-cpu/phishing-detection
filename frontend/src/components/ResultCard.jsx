@@ -50,6 +50,8 @@ const DETAIL_LABELS = {
   ssl_issuer_trusted: 'SSL Issuer Trusted',
   redirect_count: 'Redirect Count',
   cross_domain_redirect: 'Cross-Domain Redirect',
+  resolved_ips: 'Resolved IPs',
+  ptr_record: 'Reverse DNS (PTR)',
 }
 
 const SIGNAL_LABELS = {
@@ -110,24 +112,61 @@ function formatDetailValue(key, value) {
     return `${(value / 365).toFixed(1)} years`
   }
   if (key === 'ssl_age_days') return `${value} days`
-  if (key === 'ssl_valid' || key === 'ssl_issuer_trusted' || key === 'is_privacy_protected') {
+  if (key === 'ssl_valid' || key === 'ssl_issuer_trusted') {
     return value === 1 ? 'Yes' : 'No'
   }
+  if (key === 'is_privacy_protected') return value === 1 ? 'Yes' : 'No'
   if (key === 'cross_domain_redirect') {
     if (value === -1) return 'N/A'
     return value === 1 ? 'Yes' : 'No'
   }
+  if (key === 'resolved_ips') {
+    if (Array.isArray(value)) return value.join(', ') || 'N/A'
+    return String(value)
+  }
+  if (key === 'ptr_record') return value || 'N/A'
   return String(value)
 }
 
-function getDetailColor(key, value) {
+function getDetailColor(key, value, extra) {
   if (value === -1 || value === '' || value === undefined) return '#64748b'
   if (key === 'ssl_valid') return value === 1 ? '#10b981' : '#ef4444'
-  if (key === 'domain_age_days') return value < 30 ? '#ef4444' : value < 365 ? '#eab308' : '#10b981'
-  if (key === 'redirect_count') return value > 2 ? '#ef4444' : '#10b981'
-  if (key === 'cross_domain_redirect') return value === 1 ? '#ef4444' : '#10b981'
-  if (key === 'is_privacy_protected') return value === 1 ? '#eab308' : '#10b981'
+  if (key === 'ssl_issuer_trusted') return value === 1 ? '#10b981' : '#eab308'
+  if (key === 'domain_age_days') {
+    if (value < 30) return '#ef4444'
+    if (value < 365) return '#eab308'
+    return '#10b981'
+  }
+  if (key === 'redirect_count') return value > 2 ? '#ef4444' : '#c4d1ec'
+  if (key === 'cross_domain_redirect') {
+    if (value === 0) return '#10b981'
+    const redirectToWhitelisted = extra?.redirectToWhitelisted
+    return redirectToWhitelisted ? '#10b981' : '#ef4444'
+  }
+  if (key === 'is_privacy_protected') return '#8892b0'
+  if (key === 'ttl') {
+    if (value < 300 && extra?.whitelisted) return '#c4d1ec'
+    if (value < 300) return '#eab308'
+    return '#c4d1ec'
+  }
   return '#c4d1ec'
+}
+
+function getDetailBadge(key, value, extra) {
+  if (key === 'domain_age_days' && value >= 0) {
+    if (value < 30) return { text: 'New Domain \u00B7 High Risk', color: '#ef4444', bg: '#2a1515' }
+    if (value < 365) return { text: 'Young Domain \u00B7 Suspicious', color: '#eab308', bg: '#2a2415' }
+    return { text: 'Established \u00B7 Safe', color: '#10b981', bg: '#142a15' }
+  }
+  if (key === 'ttl' && value >= 0) {
+    if (value < 300 && extra?.whitelisted) return { text: 'Low TTL (CDN/Load Balancing)', color: '#c4d1ec', bg: '#0b0f19' }
+    if (value < 300) return { text: 'Low TTL \u00B7 Suspicious', color: '#eab308', bg: '#2a2415' }
+  }
+  if (key === 'cross_domain_redirect') {
+    if (value === 1 && extra?.redirectToWhitelisted) return { text: 'Yes (Whitelisted Destination)', color: '#10b981', bg: '#142a15' }
+    if (value === 1) return { text: 'Yes (Unknown Destination)', color: '#ef4444', bg: '#2a1515' }
+  }
+  return null
 }
 
 function formatSignalRisk(key, value) {
@@ -485,7 +524,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
   )
 }
 
-function DetailsTab({ dns, ssl }) {
+function DetailsTab({ dns, ssl, whitelisted, redirectToWhitelisted }) {
+  const extra = { whitelisted, redirectToWhitelisted }
+
   if (!dns && !ssl) {
     return (
       <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.9rem' }}>
@@ -494,7 +535,30 @@ function DetailsTab({ dns, ssl }) {
     )
   }
 
-  const details = { ...dns, ...ssl }
+  const renderRow = (key, value) => {
+    const label = DETAIL_LABELS[key] || key
+    const formatted = formatDetailValue(key, value)
+    const color = getDetailColor(key, value, extra)
+    const badge = getDetailBadge(key, value, extra)
+    return (
+      <div key={key} style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '0.35rem 0.5rem', borderRadius: '6px', background: '#0b0f19', gap: '0.5rem',
+      }}>
+        <span style={{ color: '#8892b0', fontSize: '0.78rem', flexShrink: 0 }}>{label}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', textAlign: 'right', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span style={{ color, fontSize: '0.78rem', fontWeight: 600 }}>{formatted}</span>
+          {badge && (
+            <span style={{
+              padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem',
+              fontWeight: 600, background: badge.bg, color: badge.color,
+              whiteSpace: 'nowrap',
+            }}>{badge.text}</span>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -503,20 +567,7 @@ function DetailsTab({ dns, ssl }) {
           DNS & WHOIS
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          {dns && Object.entries(dns).map(([key, value]) => {
-            const label = DETAIL_LABELS[key] || key
-            const formatted = formatDetailValue(key, value)
-            const color = getDetailColor(key, value)
-            return (
-              <div key={key} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '0.35rem 0.5rem', borderRadius: '6px', background: '#0b0f19',
-              }}>
-                <span style={{ color: '#8892b0', fontSize: '0.78rem' }}>{label}</span>
-                <span style={{ color, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' }}>{formatted}</span>
-              </div>
-            )
-          })}
+          {dns && Object.entries(dns).map(([key, value]) => renderRow(key, value))}
         </div>
       </div>
       <div>
@@ -524,20 +575,7 @@ function DetailsTab({ dns, ssl }) {
           SSL & Redirect
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          {ssl && Object.entries(ssl).map(([key, value]) => {
-            const label = DETAIL_LABELS[key] || key
-            const formatted = formatDetailValue(key, value)
-            const color = getDetailColor(key, value)
-            return (
-              <div key={key} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '0.35rem 0.5rem', borderRadius: '6px', background: '#0b0f19',
-              }}>
-                <span style={{ color: '#8892b0', fontSize: '0.78rem' }}>{label}</span>
-                <span style={{ color, fontSize: '0.78rem', fontWeight: 600, textAlign: 'right' }}>{formatted}</span>
-              </div>
-            )
-          })}
+          {ssl && Object.entries(ssl).map(([key, value]) => renderRow(key, value))}
         </div>
       </div>
     </div>
@@ -742,7 +780,7 @@ function ResultCard({ result }) {
         </div>
 
         {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance: result.feature_importance, confidence }} />}
-        {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} />}
+        {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} whitelisted={result.whitelisted} redirectToWhitelisted={result.redirect_whitelisted || false} />}
         {tab === 'behavior' && <BehaviorTab domSignals={domSignals} features={features} />}
       </div>
     </div>

@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import dns.resolver
+import dns.reversename
 import whois
 
 CACHE_PATH = Path(__file__).resolve().parents[2] / "data" / "cache" / "whois_cache.json"
@@ -44,12 +45,24 @@ def query_dns(domain: str) -> dict:
         "mx_record_count": -1,
         "ns_record_count": -1,
         "ttl": -1,
+        "resolved_ips": [],
+        "ptr_record": "",
     }
     try:
         answers = dns.resolver.resolve(domain, "A", lifetime=5)
         result["a_record_count"] = len(answers)
+        ips = [str(r) for r in answers]
+        result["resolved_ips"] = ips
         if answers:
             result["ttl"] = answers.rrset.ttl if answers.rrset else -1
+        if ips:
+            try:
+                rev = dns.reversename.from_address(ips[0])
+                ptr = dns.resolver.resolve(rev, "PTR", lifetime=5)
+                if ptr:
+                    result["ptr_record"] = str(ptr[0]).rstrip(".")
+            except Exception:
+                pass
     except Exception:
         pass
     try:

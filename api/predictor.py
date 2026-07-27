@@ -123,9 +123,11 @@ class PhishingPredictor:
         reg_domain = _get_registered_domain(url)
         effective_url = url
 
+        redirect_whitelisted = False
         if expanded_url:
             final_domain = _get_registered_domain(expanded_url)
             if final_domain and final_domain in WHITELIST_DOMAINS:
+                redirect_whitelisted = True
                 return {
                     "url": url,
                     "phishing_probability": 0.001,
@@ -134,6 +136,7 @@ class PhishingPredictor:
                     "brand_analysis": get_brand_risk_score(expanded_url, ""),
                     "features": self._get_feature_summary(self._extract_tabular(url)),
                     "whitelisted": True,
+                    "redirect_whitelisted": True,
                     "dns_whois": dns_whois,
                     "ssl_redirect": ssl_redirect,
                     "suspicious_tld": susp_tld,
@@ -158,6 +161,7 @@ class PhishingPredictor:
                 "brand_analysis": brand_info,
                 "features": self._get_feature_summary(self._extract_tabular(url)),
                 "whitelisted": True,
+                "redirect_whitelisted": False,
                 "dns_whois": dns_whois,
                 "ssl_redirect": ssl_redirect,
                 "suspicious_tld": susp_tld,
@@ -210,6 +214,7 @@ class PhishingPredictor:
             "features": self._get_feature_summary(tab_vec),
             "feature_importance": feature_importance,
             "whitelisted": False,
+            "redirect_whitelisted": False,
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
             "dom_signals": dom_signals,

@@ -24,6 +24,7 @@ TRUSTED_CA_KEYWORDS = [
     "let's encrypt", "digicert", "comodo", "globalsign",
     "geotrust", "godaddy", "thawte", "verisign", "sectigo",
     "entrust", "rapidssl", "identrust", "buypass",
+    "google trust services", "gts", "google",
 ]
 
 
