@@ -52,6 +52,24 @@ WHITELIST_DOMAINS = {
     "paypal.com", "ebay.com",
     "zoom.us", "dropbox.com",
     "cloudflare.com",
+    # Vietnamese major sites
+    "vietnamnet.vn", "vnexpress.net", "tuoitre.vn",
+    "thanhnien.vn", "dantri.com.vn", "nguoiduatin.vn",
+    "vov.vn", "baomoi.com", "cafef.vn", "cafebiz.vn",
+    "zalo.me", "chotot.com", "batdongsan.com.vn",
+    "tiki.vn", "shopee.vn", "thegioididong.com",
+    "vietcombank.com.vn", "techcombank.com.vn",
+    "acb.com.vn", "vpbank.com.vn", "mbbank.com.vn",
+    "vietinbank.vn", "bidv.com.vn",
+}
+
+# Country TLDs with strong regulatory oversight — model may not have seen during training
+SAFE_COUNTRY_TLDS = {
+    ".vn", ".uk", ".jp", ".de", ".fr", ".it", ".es", ".nl",
+    ".se", ".no", ".dk", ".fi", ".au", ".nz", ".sg", ".my",
+    ".kr", ".tw", ".hk", ".cn", ".in", ".br", ".mx", ".ar",
+    ".ch", ".at", ".be", ".ie", ".pl", ".cz", ".hu", ".pt",
+    ".gov", ".edu", ".mil",
 }
 
 
@@ -72,7 +90,9 @@ def _get_registered_domain(url: str) -> str | None:
             return domain
         # Handle common 2-part TLDs like co.uk, com.au
         two_part_tlds = {"co.uk", "com.au", "co.nz", "co.jp", "co.kr",
-                         "or.jp", "ac.uk", "gov.uk", "org.uk", "net.au"}
+                         "or.jp", "ac.uk", "gov.uk", "org.uk", "net.au",
+                         "com.vn", "co.vn", "com.sg", "com.hk", "com.tw",
+                         "co.id", "or.id", "ac.id", "go.id"}
         if len(parts) >= 3 and ".".join(parts[-2:]) in two_part_tlds:
             return ".".join(parts[-3:])
         return ".".join(parts[-2:])
@@ -191,6 +211,16 @@ class PhishingPredictor:
         )
         prob = torch.sigmoid(logits)
         prob_val = prob.item()
+
+        # Infrastructure sanity check: override AI if strong signals contradict
+        if prob_val > 0.5 and dns_whois and ssl_redirect:
+            a_count = dns_whois.get("a_record_count", -1)
+            mx_count = dns_whois.get("mx_record_count", -1)
+            ssl_ok = ssl_redirect.get("ssl_valid", -1) == 1
+            if a_count >= 2 and mx_count >= 1 and ssl_ok:
+                domain = _get_registered_domain(effective_url)
+                if domain and any(domain.endswith(t) for t in SAFE_COUNTRY_TLDS):
+                    prob_val = min(prob_val, 0.15)
 
         self.model.zero_grad()
         prob.backward()

@@ -20,6 +20,14 @@ const WHITELIST_DOMAINS = [
   'paypal.com', 'ebay.com',
   'zoom.us', 'dropbox.com',
   'cloudflare.com',
+  'vietnamnet.vn', 'vnexpress.net', 'tuoitre.vn',
+  'thanhnien.vn', 'dantri.com.vn', 'nguoiduatin.vn',
+  'vov.vn', 'baomoi.com', 'cafef.vn', 'cafebiz.vn',
+  'zalo.me', 'chotot.com', 'batdongsan.com.vn',
+  'tiki.vn', 'shopee.vn', 'thegioididong.com',
+  'vietcombank.com.vn', 'techcombank.com.vn',
+  'acb.com.vn', 'vpbank.com.vn', 'mbbank.com.vn',
+  'vietinbank.vn', 'bidv.com.vn',
 ]
 
 const FEATURE_LABELS = {
