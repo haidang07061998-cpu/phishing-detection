@@ -151,9 +151,8 @@ function getDetailColor(key, value, extra) {
   }
   if (key === 'redirect_count') return value > 4 ? '#ef4444' : value > 2 ? '#eab308' : '#c4d1ec'
   if (key === 'cross_domain_redirect') {
-    if (value === 0) return '#10b981'
-    const redirectToWhitelisted = extra?.redirectToWhitelisted
-    return redirectToWhitelisted ? '#10b981' : '#ef4444'
+    if (value !== 1) return '#10b981'
+    return extra?.whitelisted ? '#c4d1ec' : '#ef4444'
   }
   if (key === 'is_privacy_protected') return '#8892b0'
   if (key === 'ttl') {
@@ -178,8 +177,9 @@ function getDetailBadge(key, value, extra) {
     if (value < 300) return { text: 'Low TTL \u00B7 Suspicious', color: '#eab308', bg: '#2a2415' }
   }
   if (key === 'cross_domain_redirect') {
-    if (value === 1 && extra?.redirectToWhitelisted) return { text: 'Yes (Whitelisted Destination)', color: '#10b981', bg: '#142a15' }
-    if (value === 1) return { text: 'Yes (Unknown Destination)', color: '#ef4444', bg: '#2a1515' }
+    if (value !== 1) return null
+    if (extra?.whitelisted) return { text: 'Yes (Whitelisted Destination)', color: '#10b981', bg: '#142a15' }
+    return { text: 'Yes (Unknown Destination)', color: '#ef4444', bg: '#2a1515' }
   }
   return null
 }
@@ -539,9 +539,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
   )
 }
 
-function DetailsTab({ dns, ssl, whitelisted, redirectToWhitelisted, result }) {
+function DetailsTab({ dns, ssl, whitelisted, result }) {
   const trustedCAOverride = result?.url ? /google\.com|youtube\.com|gmail\.com|github\.com|facebook\.com|microsoft\.com|apple\.com|amazon\.com/i.test(result.url) : false
-  const extra = { whitelisted, redirectToWhitelisted, trustedCAOverride }
+  const extra = { whitelisted, trustedCAOverride }
 
   if (!dns && !ssl) {
     return (
@@ -797,7 +797,7 @@ function ResultCard({ result }) {
         </div>
 
         {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance: result.feature_importance, confidence }} />}
-        {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} whitelisted={result.whitelisted} redirectToWhitelisted={result.redirect_whitelisted || false} result={result} />}
+        {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} whitelisted={result.whitelisted} result={result} />}
         {tab === 'behavior' && <BehaviorTab domSignals={domSignals} features={features} />}
       </div>
     </div>
