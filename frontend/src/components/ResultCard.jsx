@@ -92,10 +92,13 @@ function getFeatureRisk(name, value) {
   if (name === 'has_https') return value === 0
   if (name === 'has_ip_address') return value === 1
   if (name === 'tld_in_path') return value === 1
-  if (name === 'entropy') return value > 4
-  if (name === 'subdomain_count') return value > 1
+  if (name === 'entropy') return value > 4.5
+  if (name === 'subdomain_count') return value > 2
   if (name === 'digit_ratio') return value > 0.3
-  if (name === 'special_char_ratio') return value > 0.3
+  if (name === 'special_char_ratio') return value > 0.25
+  if (name === 'url_length') return value > 75
+  if (name === 'domain_length') return value > 30
+  if (name === 'path_length') return value > 50
   return value > 0.5
 }
 
@@ -143,18 +146,18 @@ function formatSignalRisk(key, value) {
 
 function Gauge({ value }) {
   const pct = Math.min(Math.max(value * 100, 0), 100)
-  const r = 72, cx = 88, cy = 82, stroke = 10
+  const r = 85, cx = 102, cy = 96, stroke = 12
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - pct / 100)
   const color = pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981'
   const label = pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE'
   return (
-    <svg width="176" height="112" viewBox="0 0 176 112" style={{ display: 'block', margin: '0 auto' }}>
-      <path d="M16 106 A 72 72 0 0 1 160 106" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
-      <path d="M16 106 A 72 72 0 0 1 160 106" fill="none" stroke={color} strokeWidth={stroke}
+    <svg width="204" height="130" viewBox="0 0 204 130" style={{ display: 'block', margin: '0 auto' }}>
+      <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
+      <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke={color} strokeWidth={stroke}
         strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
-      <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="28" fontWeight="bold">{pct.toFixed(0)}%</text>
-      <text x={cx} y={cy + 20} textAnchor="middle" fill={color} fontSize="11" fontWeight="700">{label}</text>
+      <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="32" fontWeight="bold">{pct.toFixed(0)}%</text>
+      <text x={cx} y={cy + 24} textAnchor="middle" fill={color} fontSize="12" fontWeight="700">{label}</text>
     </svg>
   )
 }
@@ -320,7 +323,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem',
       }}>
         <div>
-          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
+          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid #1e2a45', paddingBottom: '0.35rem' }}>
             Morphology &amp; Characters
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -351,7 +354,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
 
         <div>
-          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
+          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid #1e2a45', paddingBottom: '0.35rem' }}>
             Behavioral &amp; Infrastructure
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>

@@ -158,9 +158,9 @@ function App() {
           margin: '0 0 2rem',
           textAlign: 'center',
         }}>
-          {activeTab === 'url' ? 'Powered by Gated Fusion AI &middot; TabTransformer + ModernBERT + DOM Analysis' :
-           activeTab === 'domain' ? 'DNS records &middot; WHOIS data &middot; SSL certificate info' :
-           'Reverse DNS &middot; WHOIS lookup &middot; Network intelligence'}
+          {activeTab === 'url' ? 'Powered by Gated Fusion AI \u00B7 TabTransformer + ModernBERT + DOM Analysis' :
+           activeTab === 'domain' ? 'DNS records \u00B7 WHOIS data \u00B7 SSL certificate info' :
+           'Reverse DNS \u00B7 WHOIS lookup \u00B7 Network intelligence'}
         </p>
 
         <UrlInput onPredict={handlePredict} loading={loading} activeTab={activeTab} />
