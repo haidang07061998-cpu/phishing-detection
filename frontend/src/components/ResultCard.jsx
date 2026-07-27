@@ -457,7 +457,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
               <tbody>
                 {[
-                  { label: 'AI Confidence', value: `${pct}%`, color: barColor },
+                  { label: 'AI Confidence', value: `${pct}%`, color: barColor, tooltip: 'Raw output from Gated Fusion model. Sigmoid activation never returns absolute 0 — final decision is determined by the Whitelist Override Layer.' },
                   { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : '#64748b' },
                   { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
                   { label: 'Final Destination', value: expandedUrl || 'Same as input', color: expandedUrl ? '#eab308' : '#10b981' },
@@ -469,6 +469,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                   <tr key={i}>
                     <td style={{ padding: '0.25rem 0.5rem 0.25rem 0', color: '#64748b', borderBottom: i < 7 ? '1px solid #1e2a45' : 'none' }}>
                       {row.label}
+                      {row.tooltip && <TooltipIcon text={row.tooltip} />}
                     </td>
                     <td style={{ padding: '0.25rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 7 ? '1px solid #1e2a45' : 'none', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.value}
