@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import dns.resolver
 import dns.reversename
 import whois
+from ipwhois import IPWhois
 
 CACHE_PATH = Path(__file__).resolve().parents[2] / "data" / "cache" / "whois_cache.json"
 
@@ -47,6 +48,9 @@ def query_dns(domain: str) -> dict:
         "ttl": -1,
         "resolved_ips": [],
         "ptr_record": "",
+        "asn": "",
+        "asn_description": "",
+        "asn_country": "",
     }
     try:
         answers = dns.resolver.resolve(domain, "A", lifetime=5)
@@ -61,6 +65,14 @@ def query_dns(domain: str) -> dict:
                 ptr = dns.resolver.resolve(rev, "PTR", lifetime=5)
                 if ptr:
                     result["ptr_record"] = str(ptr[0]).rstrip(".")
+            except Exception:
+                pass
+            try:
+                obj = IPWhois(ips[0])
+                asn_data = obj.lookup_rdap(depth=1)
+                result["asn"] = asn_data.get("asn", "")
+                result["asn_description"] = asn_data.get("asn_description", "")
+                result["asn_country"] = asn_data.get("asn_country_code", "") or asn_data.get("asn_country", "")
             except Exception:
                 pass
     except Exception:

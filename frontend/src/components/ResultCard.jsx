@@ -52,6 +52,9 @@ const DETAIL_LABELS = {
   cross_domain_redirect: 'Cross-Domain Redirect',
   resolved_ips: 'Resolved IPs',
   ptr_record: 'Reverse DNS (PTR)',
+  asn: 'ASN',
+  asn_description: 'ISP',
+  asn_country: 'ASN Country',
 }
 
 const SIGNAL_LABELS = {
@@ -105,7 +108,7 @@ function getFeatureRisk(name, value) {
 }
 
 function formatDetailValue(key, value) {
-  if (value === -1 || value === '' || value === undefined) return 'N/A'
+  if (value === -1 || value === '' || value === undefined || value === null) return 'N/A'
   if (key === 'domain_age_days') {
     if (value < 30) return `${value} days`
     if (value < 365) return `${Math.round(value / 30)} months`
@@ -125,6 +128,9 @@ function formatDetailValue(key, value) {
     return String(value)
   }
   if (key === 'ptr_record') return value || 'N/A'
+  if (key === 'asn') return value ? `AS${value}` : 'N/A'
+  if (key === 'asn_description') return value || 'N/A'
+  if (key === 'asn_country') return value || 'N/A'
   return String(value)
 }
 
@@ -149,6 +155,8 @@ function getDetailColor(key, value, extra) {
     if (value < 300) return '#eab308'
     return '#c4d1ec'
   }
+  if (key === 'asn_description') return '#c4d1ec'
+  if (key === 'asn' || key === 'asn_country') return '#c4d1ec'
   return '#c4d1ec'
 }
 
