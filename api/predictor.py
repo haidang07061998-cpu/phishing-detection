@@ -7,7 +7,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.models.full_model import PhishingDetector, load_checkpoint
-from src.features.url_extractor import extract_url_features
+from src.features.url_extractor import extract_url_features, check_suspicious_tld, is_url_shortener
 from src.features.html_dom_extractor import extract_html_features
 from src.features.dns_whois_extractor import extract_dns_whois_features
 from src.features.ssl_redirect_extractor import extract_ssl_redirect_features
@@ -116,9 +116,21 @@ class PhishingPredictor:
 
         dns_whois = self._extract_dns_whois(url)
         ssl_redirect = self._extract_ssl_redirect(url)
+        susp_tld = check_suspicious_tld(url)
+        is_short = is_url_shortener(url)
+        expanded_url = ssl_redirect.get("final_url", "") if ssl_redirect else ""
 
         reg_domain = _get_registered_domain(url)
-        if reg_domain and reg_domain in WHITELIST_DOMAINS:
+        effective_url = url
+        is_whitelisted = bool(reg_domain and reg_domain in WHITELIST_DOMAINS)
+
+        if is_whitelisted and expanded_url:
+            final_domain = _get_registered_domain(expanded_url)
+            if final_domain and final_domain not in WHITELIST_DOMAINS:
+                is_whitelisted = False
+                effective_url = expanded_url
+
+        if is_whitelisted:
             brand_info = get_brand_risk_score(url, "")
             return {
                 "url": url,
@@ -130,11 +142,14 @@ class PhishingPredictor:
                 "whitelisted": True,
                 "dns_whois": dns_whois,
                 "ssl_redirect": ssl_redirect,
+                "suspicious_tld": susp_tld,
+                "is_shortener": is_short,
+                "expanded_url": expanded_url if expanded_url else None,
             }
 
         self.model.eval()
-        tab_vec = self._extract_tabular(url)
-        dom_vec, clean_text = self._extract_html(html_content, url) if html_content else (
+        tab_vec = self._extract_tabular(effective_url)
+        dom_vec, clean_text = self._extract_html(html_content, effective_url) if html_content else (
             np.zeros(64, dtype=np.float32), "[content not provided]"
         )
 
@@ -164,11 +179,12 @@ class PhishingPredictor:
         }
         tab_tensor.requires_grad_(False)
 
-        brand_info = get_brand_risk_score(url, clean_text)
+        brand_info = get_brand_risk_score(effective_url, clean_text)
         dom_signals = self._extract_dom_signals(dom_vec)
 
         return {
             "url": url,
+            "effective_url": effective_url if effective_url != url else None,
             "phishing_probability": round(prob_val, 4),
             "is_phishing": prob_val >= 0.5,
             "html_provided": html_content is not None,
@@ -179,6 +195,9 @@ class PhishingPredictor:
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
             "dom_signals": dom_signals,
+            "suspicious_tld": susp_tld,
+            "is_shortener": is_short,
+            "expanded_url": expanded_url if expanded_url else None,
         }
 
     def _get_feature_summary(self, tab_vec: np.ndarray) -> dict:
@@ -240,6 +259,7 @@ class PhishingPredictor:
         return {
             "domain": domain,
             "dns_whois": dns_whois,
+            "suspicious_tld": check_suspicious_tld(url),
             "type": "domain",
         }
 
@@ -251,6 +271,7 @@ class PhishingPredictor:
             "ip": ip,
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
+            "suspicious_tld": 0,
             "type": "ip",
         }
 

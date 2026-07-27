@@ -112,6 +112,39 @@ def extract_url_features(url: str) -> dict:
     }
 
 
+SUSPICIOUS_TLDS = {
+    '.xyz', '.top', '.club', '.loan', '.click',
+    '.gq', '.ml', '.tk', '.cf', '.ga', '.pw',
+    '.work', '.date', '.faith', '.racing', '.win',
+    '.bid', '.trade', '.webcam', '.science', '.review',
+    '.country', '.kim', '.men', '.download', '.party',
+}
+
+URL_SHORTENERS = {
+    'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly',
+    'is.gd', 'buff.ly', 'shorturl.at', 'tiny.cc', 'tr.im',
+    'cli.gs', 'yfrog.com', 'migre.me', 'ff.im', 'ur1.ca',
+    'v.gd', 'twitthis.com', 'r.im', 'snipurl.com',
+    'cuturl.com', 'tiny.pl', 'bc.vc', 'su.pr',
+}
+
+
+def check_suspicious_tld(url: str) -> int:
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    for tld in SUSPICIOUS_TLDS:
+        if domain.endswith(tld):
+            return 1
+    return 0
+
+
+def is_url_shortener(url: str) -> bool:
+    parsed = urlparse(url)
+    domain = (parsed.netloc or parsed.hostname or "").lower()
+    domain = domain.split(":")[0]
+    return domain in URL_SHORTENERS
+
+
 def extract_url_features_batch(urls: list[str]) -> list[dict]:
     return [extract_url_features(u) for u in urls]
 

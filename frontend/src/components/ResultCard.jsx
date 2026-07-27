@@ -258,7 +258,41 @@ function TabButton({ active, onClick, children }) {
   )
 }
 
+function formatFeatureBadge(name, value) {
+  const formatted = formatFeatureValue(name, value)
+  if (name === 'entropy') {
+    const label = value > 4.5 ? 'High \u00B7 Suspicious' : value > 3.5 ? 'Medium \u00B7 Neutral' : 'Low \u00B7 Safe'
+    const color = value > 4.5 ? '#ef4444' : value > 3.5 ? '#eab308' : '#10b981'
+    return { text: `${formatted} \u00B7 ${label}`, color }
+  }
+  if (name === 'domain_length') {
+    const isLong = value > 20
+    return { text: formatted, color: isLong ? '#ef4444' : '#10b981' }
+  }
+  if (name === 'subdomain_count') {
+    const isHigh = value > 2
+    return { text: formatted, color: isHigh ? '#ef4444' : '#10b981' }
+  }
+  if (name === 'digit_ratio') {
+    const isHigh = value > 0.3
+    return { text: formatted, color: isHigh ? '#ef4444' : '#10b981' }
+  }
+  return { text: formatted, color: null }
+}
+
 function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance, confidence }) {
+  const suspTld = result.suspicious_tld
+  const isShort = result.is_shortener
+  const expandedUrl = result.expanded_url
+
+  const morphFeatures = ['url_length', 'domain_length', 'path_length', 'url_depth', 'digit_ratio', 'special_char_ratio']
+  const behavFeatures = ['suspicious_keywords', 'has_ip_address', 'tld_in_path', 'has_https', 'subdomain_count', 'entropy']
+
+  const featureMap = {}
+  features.forEach(f => { featureMap[f.name] = f })
+
+  const isWhitelisted = result.whitelisted
+
   return (
     <>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', alignItems: 'flex-start' }}>
@@ -266,34 +300,49 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           <Gauge value={confidence} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {importance && <FeatureImportanceChart importance={importance} />}
+          {!isWhitelisted && importance && <FeatureImportanceChart importance={importance} />}
+          {isWhitelisted && (
+            <div style={{
+              padding: '1rem', borderRadius: '8px', background: '#142a15',
+              border: '1px solid #10b98144', marginTop: '1rem',
+            }}>
+              <p style={{ margin: 0, color: '#10b981', fontSize: '0.85rem', fontWeight: 700 }}>
+                {'\u2713'} Whitelisted Domain
+              </p>
+              <p style={{ margin: '0.35rem 0 0', color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.4' }}>
+                This domain bypassed AI inference — it is in the trusted whitelist of known legitimate websites. The low confidence (0.1%) reflects the whitelist override, not model analysis.
+              </p>
+            </div>
+          )}
         </div>
       </div>
       <div style={{
         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem',
       }}>
         <div>
-          <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
-            URL Feature Signals
+          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
+            Morphology &amp; Characters
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-            {features.slice(0, 6).map((f, i) => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            {morphFeatures.map(key => {
+              const f = featureMap[key]
+              if (!f) return null
               const label = FEATURE_LABELS[f.name] || f.name
               const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const formatted = formatFeatureValue(f.name, f.value)
+              const { text, color } = formatFeatureBadge(f.name, f.value)
               const isRisk = getFeatureRisk(f.name, f.value)
               return (
-                <div key={i} style={{
+                <div key={f.name} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '0.35rem 0.5rem', borderRadius: '6px',
+                  padding: '0.3rem 0.5rem', borderRadius: '6px',
                   background: isRisk ? '#2a1515' : '#0b0f19',
                 }}>
-                  <span style={{ color: '#8892b0', fontSize: '0.78rem', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                     {label}
                     {tooltip && <TooltipIcon text={tooltip} />}
                   </span>
-                  <Badge color={isRisk ? '#ef4444' : '#10b981'} bg={isRisk ? '#2a1515' : '#142a15'}>
-                    {formatted}
+                  <Badge color={color || (isRisk ? '#ef4444' : '#10b981')} bg={isRisk ? '#2a1515' : '#142a15'}>
+                    {text}
                   </Badge>
                 </div>
               )
@@ -302,10 +351,55 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
 
         <div>
-          <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
+            Behavioral &amp; Infrastructure
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+            {behavFeatures.map(key => {
+              const f = featureMap[key]
+              if (!f) return null
+              const label = FEATURE_LABELS[f.name] || f.name
+              const tooltip = FEATURE_TOOLTIPS[f.name] || ''
+              const { text, color } = formatFeatureBadge(f.name, f.value)
+              const isRisk = getFeatureRisk(f.name, f.value)
+              return (
+                <div key={f.name} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '0.3rem 0.5rem', borderRadius: '6px',
+                  background: isRisk ? '#2a1515' : '#0b0f19',
+                }}>
+                  <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
+                    {label}
+                    {tooltip && <TooltipIcon text={tooltip} />}
+                  </span>
+                  <Badge color={color || (isRisk ? '#ef4444' : '#10b981')} bg={isRisk ? '#2a1515' : '#142a15'}>
+                    {text}
+                  </Badge>
+                </div>
+              )
+            })}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '0.3rem 0.5rem', borderRadius: '6px',
+              background: suspTld ? '#2a1515' : '#0b0f19',
+            }}>
+              <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
+                Suspicious TLD
+                <TooltipIcon text="Certain TLD extensions (.xyz, .top, .loan ...) are disproportionately used by phishing campaigns due to low registration cost." />
+              </span>
+              <Badge color={suspTld ? '#ef4444' : '#10b981'} bg={suspTld ? '#2a1515' : '#142a15'}>
+                {suspTld ? 'Yes' : 'No'}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+        <div>
+          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
             Advanced Analysis
           </p>
-
           {brand?.has_brand_impersonation ? (
             <div style={{
               padding: '0.75rem', borderRadius: '8px',
@@ -347,7 +441,12 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               </p>
             </div>
           )}
+        </div>
 
+        <div>
+          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
+            Analysis Details
+          </p>
           <div style={{
             padding: '0.75rem', borderRadius: '8px',
             background: '#0b0f19', border: '1px solid #1e2a45',
@@ -356,16 +455,19 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               <tbody>
                 {[
                   { label: 'AI Confidence', value: `${pct}%`, color: barColor },
+                  { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : '#64748b' },
+                  { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
+                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: expandedUrl ? '#eab308' : '#10b981' },
                   { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : '#64748b' },
                   { label: 'Features Extracted', value: `${features.length} signals`, color: '#c4d1ec' },
                   { label: 'Model', value: 'Gated Fusion v2', color: '#c4d1ec' },
                   { label: 'Scan Time', value: scanTime, color: '#64748b' },
                 ].map((row, i) => (
                   <tr key={i}>
-                    <td style={{ padding: '0.3rem 0.5rem 0.3rem 0', color: '#64748b', borderBottom: i < 4 ? '1px solid #1e2a45' : 'none' }}>
+                    <td style={{ padding: '0.25rem 0.5rem 0.25rem 0', color: '#64748b', borderBottom: i < 7 ? '1px solid #1e2a45' : 'none' }}>
                       {row.label}
                     </td>
-                    <td style={{ padding: '0.3rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 4 ? '1px solid #1e2a45' : 'none' }}>
+                    <td style={{ padding: '0.25rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 7 ? '1px solid #1e2a45' : 'none', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.value}
                     </td>
                   </tr>

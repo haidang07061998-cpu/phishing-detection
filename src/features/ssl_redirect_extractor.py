@@ -76,6 +76,7 @@ def check_redirects(url: str, timeout: int = 5, max_redirects: int = 5) -> dict:
     result = {
         "redirect_count": -1,
         "cross_domain_redirect": -1,
+        "final_url": "",
     }
     try:
         original_domain = urlparse(url).hostname or ""
@@ -96,6 +97,9 @@ def check_redirects(url: str, timeout: int = 5, max_redirects: int = 5) -> dict:
             result["cross_domain_redirect"] = 1 if original_domain != final_domain else 0
         else:
             result["cross_domain_redirect"] = -1
+
+        if result["redirect_count"] > 0:
+            result["final_url"] = resp.url
     except Exception:
         pass
     return result
@@ -114,7 +118,7 @@ def extract_ssl_redirect_features(url: str) -> dict:
     """
     hostname = urlparse(url).hostname or ""
     features = {"ssl_valid": -1, "ssl_age_days": -1, "ssl_issuer_trusted": -1,
-                "redirect_count": -1, "cross_domain_redirect": -1}
+                "redirect_count": -1, "cross_domain_redirect": -1, "final_url": ""}
 
     if url.startswith("https://") and hostname:
         cert_info = get_certificate_info(hostname)
