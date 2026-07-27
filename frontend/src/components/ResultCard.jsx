@@ -205,7 +205,7 @@ function getDetailBadge(key, value, extra) {
       return {
         text: 'No',
         color: '#10b981',
-        bg: 'rgba(16, 185, 129, 0.1)',
+        bgColor: 'rgba(16, 185, 129, 0.1)',
         borderColor: 'rgba(16, 185, 129, 0.4)',
       }
     }
@@ -215,14 +215,14 @@ function getDetailBadge(key, value, extra) {
       return {
         text: 'Yes (Whitelisted Destination)',
         color: '#10b981',
-        bg: 'rgba(16, 185, 129, 0.1)',
+        bgColor: 'rgba(16, 185, 129, 0.1)',
         borderColor: 'rgba(16, 185, 129, 0.4)',
       }
     }
     return {
       text: 'Yes (Unknown Destination)',
       color: '#ef4444',
-      bg: 'rgba(239, 68, 68, 0.1)',
+      bgColor: 'rgba(239, 68, 68, 0.1)',
       borderColor: 'rgba(239, 68, 68, 0.4)',
     }
   }
@@ -243,21 +243,28 @@ function formatSignalRisk(key, value) {
   return false
 }
 
-function Gauge({ value }) {
+function Gauge({ value, whitelisted }) {
   const pct = Math.min(Math.max(value * 100, 0), 100)
   const r = 85, cx = 102, cy = 96, stroke = 12
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - pct / 100)
-  const color = pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981'
-  const label = pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE'
+  const color = whitelisted ? '#10b981' : (pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981')
+  const label = whitelisted ? 'SAFE' : (pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE')
   return (
-    <svg width="204" height="130" viewBox="0 0 204 130" style={{ display: 'block', margin: '0 auto' }}>
-      <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
-      <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke={color} strokeWidth={stroke}
-        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
-      <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="32" fontWeight="bold">{pct.toFixed(0)}%</text>
-      <text x={cx} y={cy + 24} textAnchor="middle" fill={color} fontSize="12" fontWeight="700">{label}</text>
-    </svg>
+    <div style={{ textAlign: 'center' }}>
+      <svg width="204" height="130" viewBox="0 0 204 130" style={{ display: 'block', margin: '0 auto' }}>
+        <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
+        <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+        <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="32" fontWeight="bold">{pct.toFixed(0)}%</text>
+        <text x={cx} y={cy + 24} textAnchor="middle" fill={color} fontSize="12" fontWeight="700">{label}</text>
+      </svg>
+      {whitelisted && (
+        <span style={{ color: '#10b981', fontSize: '0.65rem', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+          {'Bypassed \u00B7 Whitelist'}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -399,7 +406,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
     <>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', alignItems: 'flex-start' }}>
         <div style={{ flexShrink: 0 }}>
-          <Gauge value={confidence} />
+          <Gauge value={confidence} whitelisted={isWhitelisted} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {!isWhitelisted && importance && <FeatureImportanceChart importance={importance} />}
@@ -432,7 +439,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               const label = FEATURE_LABELS[f.name] || f.name
               const tooltip = FEATURE_TOOLTIPS[f.name] || ''
               const { text, color } = formatFeatureBadge(f.name, f.value)
-              const isRisk = getFeatureRisk(f.name, f.value)
+              const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -463,7 +470,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               const label = FEATURE_LABELS[f.name] || f.name
               const tooltip = FEATURE_TOOLTIPS[f.name] || ''
               const { text, color } = formatFeatureBadge(f.name, f.value)
-              const isRisk = getFeatureRisk(f.name, f.value)
+              const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -483,13 +490,13 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '0.3rem 0.5rem', borderRadius: '6px',
-              background: suspTld ? '#2a1515' : '#0b0f19',
+              background: suspTld && !isWhitelisted ? '#2a1515' : '#0b0f19',
             }}>
               <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                 Suspicious TLD
                 <TooltipIcon text="Certain TLD extensions (.xyz, .top, .loan ...) are disproportionately used by phishing campaigns due to low registration cost." />
               </span>
-              <Badge color={suspTld ? '#ef4444' : '#10b981'} bg={suspTld ? '#2a1515' : '#142a15'}>
+              <Badge color={suspTld && !isWhitelisted ? '#ef4444' : '#10b981'} bg={suspTld && !isWhitelisted ? '#2a1515' : '#142a15'}>
                 {suspTld ? 'Yes' : 'No'}
               </Badge>
             </div>
@@ -559,6 +566,19 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                   { label: 'AI Confidence', value: `${pct}%`, color: barColor, tooltip: 'Raw output from Gated Fusion model. Sigmoid activation never returns absolute 0 — final decision is determined by the Whitelist Override Layer.' },
                   { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : '#64748b' },
                   { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
+                  { label: 'Redirect', value: (() => {
+                    const cr = result.ssl_redirect?.cross_domain_redirect
+                    if (cr !== 1) return 'No'
+                    const fu = (result.ssl_redirect?.final_url || '').toLowerCase()
+                    const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
+                    return known ? 'Whitelisted Redirect' : 'Unknown Redirect'
+                  })(), color: (() => {
+                    const cr = result.ssl_redirect?.cross_domain_redirect
+                    if (cr !== 1) return '#10b981'
+                    const fu = (result.ssl_redirect?.final_url || '').toLowerCase()
+                    const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
+                    return known ? '#10b981' : '#ef4444'
+                  })() },
                   { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#c4d1ec' },
                   { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : '#64748b' },
                   { label: 'Features Extracted', value: `${features.length} signals`, color: '#c4d1ec' },
@@ -612,9 +632,10 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
           {badge ? (
             <span style={{
               padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem',
-              fontWeight: 600, background: badge.bg, color: badge.color,
+              fontWeight: 600, color: badge.color,
               whiteSpace: 'nowrap',
-              ...(badge.borderColor ? { border: `1px solid ${badge.borderColor}` } : {}),
+              backgroundColor: badge.bgColor || badge.bg || 'transparent',
+              border: badge.borderColor ? `1px solid ${badge.borderColor}` : 'none',
             }}>{badge.text}</span>
           ) : (
             <span style={{ color, fontSize: '0.78rem', fontWeight: 600 }}>{formatted}</span>
