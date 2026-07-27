@@ -202,8 +202,8 @@ function getDetailBadge(key, value, extra) {
   }
   if (key === 'cross_domain_redirect') {
     if (value !== 1) return null
-    const dest = extra?.finalUrl || ''
-    const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d))
+    const dest = (extra?.finalUrl || '').toLowerCase()
+    const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d.toLowerCase()))
     if (isKnown) return { text: 'Yes (Whitelisted Destination)', color: '#10b981', bg: '#142a15' }
     return { text: 'Yes (Unknown Destination)', color: '#ef4444', bg: '#2a1515' }
   }
