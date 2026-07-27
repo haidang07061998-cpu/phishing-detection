@@ -68,6 +68,9 @@ def query_dns(domain: str) -> dict:
         "asn_description": "",
         "asn_country": "",
     }
+    import re
+    ips = []
+    is_raw_ip = bool(re.match(r"^\d+\.\d+\.\d+\.\d+$", domain))
     try:
         answers = dns.resolver.resolve(domain, "A", lifetime=5)
         result["a_record_count"] = len(answers)
@@ -75,26 +78,28 @@ def query_dns(domain: str) -> dict:
         result["resolved_ips"] = ips
         if answers:
             result["ttl"] = answers.rrset.ttl if answers.rrset else -1
-        if ips:
-            try:
-                rev = dns.reversename.from_address(ips[0])
-                ptr = dns.resolver.resolve(rev, "PTR", lifetime=5)
-                if ptr:
-                    result["ptr_record"] = str(ptr[0]).rstrip(".")
-            except Exception:
-                pass
-            try:
-                obj = IPWhois(ips[0])
-                asn_data = obj.lookup_rdap(depth=1)
-                result["asn"] = asn_data.get("asn", "")
-                result["asn_description"] = asn_data.get("asn_description", "")
-                cc = asn_data.get("asn_country_code")
-                if cc:
-                    result["asn_country"] = cc
-            except Exception:
-                pass
     except Exception:
-        pass
+        if is_raw_ip:
+            ips = [domain]
+            result["resolved_ips"] = ips
+    if ips:
+        try:
+            rev = dns.reversename.from_address(ips[0])
+            ptr = dns.resolver.resolve(rev, "PTR", lifetime=5)
+            if ptr:
+                result["ptr_record"] = str(ptr[0]).rstrip(".")
+        except Exception:
+            pass
+        try:
+            obj = IPWhois(ips[0])
+            asn_data = obj.lookup_rdap(depth=1)
+            result["asn"] = asn_data.get("asn", "")
+            result["asn_description"] = asn_data.get("asn_description", "")
+            cc = asn_data.get("asn_country_code")
+            if cc:
+                result["asn_country"] = cc
+        except Exception:
+            pass
     try:
         answers = dns.resolver.resolve(domain, "MX", lifetime=5)
         result["mx_record_count"] = len(answers)
