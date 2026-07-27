@@ -367,11 +367,11 @@ function TabButton({ active, onClick, children }) {
   )
 }
 
-function formatFeatureBadge(name, value) {
+function formatFeatureBadge(name, value, whitelisted) {
   const formatted = formatFeatureValue(name, value)
   if (name === 'entropy') {
     const label = value > 4.5 ? 'High \u00B7 Suspicious' : value > 3.5 ? 'Medium \u00B7 Neutral' : 'Low \u00B7 Safe'
-    const color = value > 4.5 ? '#ef4444' : value > 3.5 ? '#eab308' : '#10b981'
+    const color = whitelisted ? '#8892b0' : (value > 4.5 ? '#ef4444' : value > 3.5 ? '#eab308' : '#10b981')
     return { text: `${formatted} \u00B7 ${label}`, color }
   }
   if (name === 'domain_length') {
@@ -438,7 +438,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               if (!f) return null
               const label = FEATURE_LABELS[f.name] || f.name
               const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const { text, color } = formatFeatureBadge(f.name, f.value)
+              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted)
               const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
@@ -469,7 +469,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               if (!f) return null
               const label = FEATURE_LABELS[f.name] || f.name
               const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const { text, color } = formatFeatureBadge(f.name, f.value)
+              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted)
               const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
@@ -579,7 +579,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                     const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
                     return known ? '#10b981' : '#ef4444'
                   })() },
-                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#c4d1ec' },
+                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#10b981' },
                   { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : '#64748b' },
                   { label: 'Features Extracted', value: `${features.length} signals`, color: '#c4d1ec' },
                   { label: 'Model', value: 'Gated Fusion v2', color: '#c4d1ec' },
