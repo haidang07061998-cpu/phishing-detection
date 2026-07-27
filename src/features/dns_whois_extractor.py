@@ -21,6 +21,22 @@ from ipwhois import IPWhois
 
 CACHE_PATH = Path(__file__).resolve().parents[2] / "data" / "cache" / "whois_cache.json"
 
+_DNS_DEFAULTS = {
+    "a_record_count": -1,
+    "mx_record_count": -1,
+    "ns_record_count": -1,
+    "ttl": -1,
+    "resolved_ips": [],
+    "ptr_record": "",
+    "asn": "",
+    "asn_description": "",
+    "asn_country": "",
+    "domain_age_days": -1,
+    "registrar": "",
+    "is_privacy_protected": -1,
+    "country": "",
+}
+
 
 def _load_cache() -> dict:
     if CACHE_PATH.exists():
@@ -72,7 +88,9 @@ def query_dns(domain: str) -> dict:
                 asn_data = obj.lookup_rdap(depth=1)
                 result["asn"] = asn_data.get("asn", "")
                 result["asn_description"] = asn_data.get("asn_description", "")
-                result["asn_country"] = asn_data.get("asn_country_code", "") or asn_data.get("asn_country", "")
+                cc = asn_data.get("asn_country_code")
+                if cc:
+                    result["asn_country"] = cc
             except Exception:
                 pass
     except Exception:
@@ -137,7 +155,7 @@ def extract_dns_whois_features(url: str, use_cache: bool = True) -> dict:
     if use_cache:
         cache = _load_cache()
         if domain in cache:
-            return cache[domain]
+            return {**_DNS_DEFAULTS, **cache[domain]}
 
     dns_result = query_dns(domain)
     whois_result = query_whois(domain)

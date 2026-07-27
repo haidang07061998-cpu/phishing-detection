@@ -50,6 +50,7 @@ const DETAIL_LABELS = {
   ssl_issuer_trusted: 'SSL Issuer Trusted',
   redirect_count: 'Redirect Count',
   cross_domain_redirect: 'Cross-Domain Redirect',
+  final_url: 'Final URL',
   resolved_ips: 'Resolved IPs',
   ptr_record: 'Reverse DNS (PTR)',
   asn: 'ASN',
@@ -143,7 +144,7 @@ function getDetailColor(key, value, extra) {
     if (value < 365) return '#eab308'
     return '#10b981'
   }
-  if (key === 'redirect_count') return value > 2 ? '#ef4444' : '#c4d1ec'
+  if (key === 'redirect_count') return value > 4 ? '#ef4444' : value > 2 ? '#eab308' : '#c4d1ec'
   if (key === 'cross_domain_redirect') {
     if (value === 0) return '#10b981'
     const redirectToWhitelisted = extra?.redirectToWhitelisted
@@ -157,6 +158,7 @@ function getDetailColor(key, value, extra) {
   }
   if (key === 'asn_description') return '#c4d1ec'
   if (key === 'asn' || key === 'asn_country') return '#c4d1ec'
+  if (key === 'final_url') return '#c4d1ec'
   return '#c4d1ec'
 }
 
@@ -507,7 +509,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                   { label: 'AI Confidence', value: `${pct}%`, color: barColor, tooltip: 'Raw output from Gated Fusion model. Sigmoid activation never returns absolute 0 — final decision is determined by the Whitelist Override Layer.' },
                   { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : '#64748b' },
                   { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
-                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: expandedUrl ? '#eab308' : '#10b981' },
+                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#c4d1ec' },
                   { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : '#64748b' },
                   { label: 'Features Extracted', value: `${features.length} signals`, color: '#c4d1ec' },
                   { label: 'Model', value: 'Gated Fusion v2', color: '#c4d1ec' },
