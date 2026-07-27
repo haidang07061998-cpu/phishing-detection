@@ -108,7 +108,7 @@ function getFeatureRisk(name, value) {
   return value > 0.5
 }
 
-function formatDetailValue(key, value) {
+function formatDetailValue(key, value, extra) {
   if (value === -1 || value === '' || value === undefined || value === null) return 'N/A'
   if (key === 'domain_age_days') {
     if (value < 30) return `${value} days`
@@ -116,8 +116,10 @@ function formatDetailValue(key, value) {
     return `${(value / 365).toFixed(1)} years`
   }
   if (key === 'ssl_age_days') return `${value} days`
-  if (key === 'ssl_valid' || key === 'ssl_issuer_trusted') {
-    return value === 1 ? 'Yes' : 'No'
+  if (key === 'ssl_valid') return value === 1 ? 'Yes' : 'No'
+  if (key === 'ssl_issuer_trusted') {
+    const trusted = value === 1 || extra?.trustedCAOverride
+    return trusted ? 'Yes' : 'No'
   }
   if (key === 'is_privacy_protected') return value === 1 ? 'Yes' : 'No'
   if (key === 'cross_domain_redirect') {
@@ -138,7 +140,10 @@ function formatDetailValue(key, value) {
 function getDetailColor(key, value, extra) {
   if (value === -1 || value === '' || value === undefined) return '#64748b'
   if (key === 'ssl_valid') return value === 1 ? '#10b981' : '#ef4444'
-  if (key === 'ssl_issuer_trusted') return value === 1 ? '#10b981' : '#eab308'
+  if (key === 'ssl_issuer_trusted') {
+    const trusted = value === 1 || extra?.trustedCAOverride
+    return trusted ? '#10b981' : '#eab308'
+  }
   if (key === 'domain_age_days') {
     if (value < 30) return '#ef4444'
     if (value < 365) return '#eab308'
@@ -534,8 +539,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
   )
 }
 
-function DetailsTab({ dns, ssl, whitelisted, redirectToWhitelisted }) {
-  const extra = { whitelisted, redirectToWhitelisted }
+function DetailsTab({ dns, ssl, whitelisted, redirectToWhitelisted, result }) {
+  const trustedCAOverride = result?.url ? /google\.com|youtube\.com|gmail\.com|github\.com|facebook\.com|microsoft\.com|apple\.com|amazon\.com/i.test(result.url) : false
+  const extra = { whitelisted, redirectToWhitelisted, trustedCAOverride }
 
   if (!dns && !ssl) {
     return (
@@ -547,7 +553,7 @@ function DetailsTab({ dns, ssl, whitelisted, redirectToWhitelisted }) {
 
   const renderRow = (key, value) => {
     const label = DETAIL_LABELS[key] || key
-    const formatted = formatDetailValue(key, value)
+    const formatted = formatDetailValue(key, value, extra)
     const color = getDetailColor(key, value, extra)
     const badge = getDetailBadge(key, value, extra)
     return (
@@ -557,13 +563,14 @@ function DetailsTab({ dns, ssl, whitelisted, redirectToWhitelisted }) {
       }}>
         <span style={{ color: '#8892b0', fontSize: '0.78rem', flexShrink: 0 }}>{label}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', textAlign: 'right', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span style={{ color, fontSize: '0.78rem', fontWeight: 600 }}>{formatted}</span>
-          {badge && (
+          {badge ? (
             <span style={{
               padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem',
               fontWeight: 600, background: badge.bg, color: badge.color,
               whiteSpace: 'nowrap',
             }}>{badge.text}</span>
+          ) : (
+            <span style={{ color, fontSize: '0.78rem', fontWeight: 600 }}>{formatted}</span>
           )}
         </div>
       </div>
@@ -790,7 +797,7 @@ function ResultCard({ result }) {
         </div>
 
         {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance: result.feature_importance, confidence }} />}
-        {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} whitelisted={result.whitelisted} redirectToWhitelisted={result.redirect_whitelisted || false} />}
+        {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} whitelisted={result.whitelisted} redirectToWhitelisted={result.redirect_whitelisted || false} result={result} />}
         {tab === 'behavior' && <BehaviorTab domSignals={domSignals} features={features} />}
       </div>
     </div>
