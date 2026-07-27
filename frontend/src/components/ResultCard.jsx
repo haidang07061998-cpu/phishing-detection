@@ -201,11 +201,30 @@ function getDetailBadge(key, value, extra) {
     if (value < 300) return { text: 'Low TTL \u00B7 Suspicious', color: '#eab308', bg: '#2a2415' }
   }
   if (key === 'cross_domain_redirect') {
-    if (value !== 1) return null
+    if (value !== 1) {
+      return {
+        text: 'No',
+        color: '#10b981',
+        bg: 'rgba(16, 185, 129, 0.1)',
+        borderColor: 'rgba(16, 185, 129, 0.4)',
+      }
+    }
     const dest = (extra?.finalUrl || '').toLowerCase()
     const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d.toLowerCase()))
-    if (isKnown) return { text: 'Yes (Whitelisted Destination)', color: '#10b981', bg: '#142a15' }
-    return { text: 'Yes (Unknown Destination)', color: '#ef4444', bg: '#2a1515' }
+    if (isKnown) {
+      return {
+        text: 'Yes (Whitelisted Destination)',
+        color: '#10b981',
+        bg: 'rgba(16, 185, 129, 0.1)',
+        borderColor: 'rgba(16, 185, 129, 0.4)',
+      }
+    }
+    return {
+      text: 'Yes (Unknown Destination)',
+      color: '#ef4444',
+      bg: 'rgba(239, 68, 68, 0.1)',
+      borderColor: 'rgba(239, 68, 68, 0.4)',
+    }
   }
   return null
 }
@@ -595,6 +614,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
               padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem',
               fontWeight: 600, background: badge.bg, color: badge.color,
               whiteSpace: 'nowrap',
+              ...(badge.borderColor ? { border: `1px solid ${badge.borderColor}` } : {}),
             }}>{badge.text}</span>
           ) : (
             <span style={{ color, fontSize: '0.78rem', fontWeight: 600 }}>{formatted}</span>
