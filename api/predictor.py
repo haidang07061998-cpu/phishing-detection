@@ -122,13 +122,31 @@ class PhishingPredictor:
 
         reg_domain = _get_registered_domain(url)
         effective_url = url
-        is_whitelisted = bool(reg_domain and reg_domain in WHITELIST_DOMAINS)
 
-        if is_whitelisted and expanded_url:
+        if expanded_url:
             final_domain = _get_registered_domain(expanded_url)
-            if final_domain and final_domain not in WHITELIST_DOMAINS:
-                is_whitelisted = False
-                effective_url = expanded_url
+            if final_domain and final_domain in WHITELIST_DOMAINS:
+                return {
+                    "url": url,
+                    "phishing_probability": 0.001,
+                    "is_phishing": False,
+                    "html_provided": html_content is not None,
+                    "brand_analysis": get_brand_risk_score(expanded_url, ""),
+                    "features": self._get_feature_summary(self._extract_tabular(url)),
+                    "whitelisted": True,
+                    "dns_whois": dns_whois,
+                    "ssl_redirect": ssl_redirect,
+                    "suspicious_tld": susp_tld,
+                    "is_shortener": is_short,
+                    "expanded_url": expanded_url,
+                    "effective_url": expanded_url,
+                }
+            effective_url = expanded_url
+
+        is_whitelisted = bool(
+            _get_registered_domain(effective_url)
+            and _get_registered_domain(effective_url) in WHITELIST_DOMAINS
+        )
 
         if is_whitelisted:
             brand_info = get_brand_risk_score(url, "")
