@@ -212,12 +212,20 @@ class PhishingPredictor:
         prob = torch.sigmoid(logits)
         prob_val = prob.item()
 
-        # Infrastructure sanity check: override AI if strong signals contradict
-        if prob_val > 0.5 and dns_whois and ssl_redirect:
+        # Infrastructure sanity check: strong DNS+SSL contradicts phishing
+        if prob_val > 0.5 and dns_whois and ssl_redirect and not susp_tld and not is_short:
             a_count = dns_whois.get("a_record_count", -1)
             mx_count = dns_whois.get("mx_record_count", -1)
             ssl_ok = ssl_redirect.get("ssl_valid", -1) == 1
-            if a_count >= 2 and mx_count >= 1 and ssl_ok:
+            # Strong infrastructure: CDN/redundancy (A>=2) + email (MX>=1) + valid SSL
+            strong_infra = a_count >= 2 and mx_count >= 1 and ssl_ok
+            # CDN-scale (A>=3) alone with SSL is strong evidence (phishing rare on CDN)
+            cdn_scale = a_count >= 3 and ssl_ok
+            # Country TLD with any infra
+            country_tld = a_count >= 1 and ssl_ok
+            if strong_infra or cdn_scale:
+                prob_val = min(prob_val, 0.15)
+            elif country_tld:
                 domain = _get_registered_domain(effective_url)
                 if domain and any(domain.endswith(t) for t in SAFE_COUNTRY_TLDS):
                     prob_val = min(prob_val, 0.15)

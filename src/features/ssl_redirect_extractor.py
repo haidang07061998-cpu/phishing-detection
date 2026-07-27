@@ -25,6 +25,7 @@ TRUSTED_CA_KEYWORDS = [
     "geotrust", "godaddy", "thawte", "verisign", "sectigo",
     "entrust", "rapidssl", "identrust", "buypass",
     "google trust services", "gts", "google",
+    "amazon", "ssl corporation", "cloudflare",
 ]
 
 
