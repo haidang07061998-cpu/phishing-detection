@@ -129,9 +129,18 @@ class PhishingPredictor:
                     "is_shortener": is_short,
                     "expanded_url": expanded_url,
                     "effective_url": expanded_url,
-                    "engine_results": {"final_score": 0.0, "final_verdict": "safe", "engines": {}},
+                    "engine_results": {
+                        "final_score": 0.0, "final_verdict": "safe",
+                        "engines": {
+                            "whitelist": {
+                                "score": 0, "verdict": "safe",
+                                "details": "Domain found in verified whitelist of known legitimate websites",
+                                "weight": 9,
+                            }
+                        },
+                    },
                     "aggregate_score": 0.0,
-                    "engine_count": 0,
+                    "engine_count": 1,
                     "reputation": get_domain_reputation(reg_domain),
                     "subdomain_info": subdomain_info,
                 }
@@ -162,9 +171,18 @@ class PhishingPredictor:
                 "suspicious_tld": susp_tld,
                 "is_shortener": is_short,
                 "expanded_url": expanded_url if expanded_url else None,
-                "engine_results": {"final_score": 0.0, "final_verdict": "safe", "engines": {}},
+                "engine_results": {
+                    "final_score": 0.0, "final_verdict": "safe",
+                    "engines": {
+                        "whitelist": {
+                            "score": 0, "verdict": "safe",
+                            "details": "Domain found in verified whitelist of known legitimate websites",
+                            "weight": 9,
+                        }
+                    },
+                },
                 "aggregate_score": 0.0,
-                "engine_count": 0,
+                "engine_count": 1,
                 "reputation": get_domain_reputation(reg_domain),
                 "subdomain_info": subdomain_info,
             }

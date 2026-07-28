@@ -1025,11 +1025,12 @@ function TypewriterText({ text, speed }) {
 function CopilotTab({ result, explanation, confidence, barColor }) {
   const [activeQuestion, setActiveQuestion] = useState(null)
   const exp = explanation || {}
+  const verdict = confidence >= 0.6 ? 'phishing' : confidence >= 0.3 ? 'suspicious' : 'safe'
 
   const faqs = [
     {
-      q: 'Why was this URL flagged?',
-      a: exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${confidence >= 0.6 ? 'phishing' : confidence >= 0.3 ? 'suspicious' : 'safe'} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
+      q: verdict === 'safe' ? 'Why is this URL considered safe?' : 'Why was this URL flagged?',
+      a: exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${verdict} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
     },
     {
       q: 'What are the key findings?',
