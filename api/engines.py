@@ -113,8 +113,12 @@ def dns_infra_engine(dns: dict, ssl: dict) -> dict:
     ssl_valid = ssl.get("ssl_valid", -1) if ssl else -1
     ssl_issuer = ssl.get("ssl_issuer_trusted", -1) if ssl else -1
     if a_count <= 0 and mx_count <= 0 and ns_count <= 0:
-        score += 50
-        details.append("No DNS records found")
+        if domain_age > 0:
+            score += 25
+            details.append("No DNS on subdomain (parent domain exists)")
+        else:
+            score += 50
+            details.append("No DNS records found")
     else:
         if a_count >= 2:
             details.append(f"{a_count} A records (redundant infra)")

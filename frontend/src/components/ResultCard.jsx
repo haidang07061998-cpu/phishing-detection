@@ -375,7 +375,7 @@ function TabButton({ active, onClick, children }) {
   )
 }
 
-function formatFeatureBadge(name, value, whitelisted) {
+function formatFeatureBadge(name, value, whitelisted, brandInfo) {
   const formatted = formatFeatureValue(name, value)
   if (name === 'entropy') {
     const label = value > 4.5 ? 'High \u00B7 Suspicious' : value > 3.5 ? 'Medium \u00B7 Neutral' : 'Low \u00B7 Safe'
@@ -387,7 +387,8 @@ function formatFeatureBadge(name, value, whitelisted) {
     return { text: formatted, color: isLong ? '#ef4444' : '#10b981' }
   }
   if (name === 'subdomain_count') {
-    const isHigh = value > 2
+    const hasBrand = brandInfo?.has_brand_impersonation
+    const isHigh = value > 2 || (hasBrand && value > 0)
     return { text: formatted, color: isHigh ? '#ef4444' : '#10b981' }
   }
   if (name === 'digit_ratio') {
@@ -495,7 +496,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               if (!f) return null
               const label = FEATURE_LABELS[f.name] || f.name
               const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted)
+              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted, brand)
               const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
@@ -526,7 +527,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               if (!f) return null
               const label = FEATURE_LABELS[f.name] || f.name
               const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted)
+              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted, brand)
               const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
@@ -738,11 +739,16 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
   )
 }
 
-function BehaviorTab({ domSignals, features }) {
-  if (!domSignals || Object.keys(domSignals).length === 0) {
+function BehaviorTab({ domSignals, features, htmlProvided }) {
+  if (!htmlProvided) {
     return (
-      <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.9rem' }}>
-        No DOM data available — submit an HTML file to see page behavior signals.
+      <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', borderRadius: '8px', background: '#0b0f19', border: '1px solid #1e2a45' }}>
+        <p style={{ margin: '0 0 0.5rem', color: '#eab308', fontSize: '1rem', fontWeight: 700 }}>
+          {'\u26A0'} HTML Content Not Provided
+        </p>
+        <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem', lineHeight: '1.5' }}>
+          No HTML content was submitted — DOM analysis is unavailable. Upload an HTML file to enable behavioral analysis including script detection, form tracking, and JavaScript signal extraction.
+        </p>
       </div>
     )
   }
@@ -938,7 +944,7 @@ function ResultCard({ result }) {
 
         {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance: result.feature_importance, confidence }} />}
         {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} whitelisted={result.whitelisted} result={result} />}
-        {tab === 'behavior' && <BehaviorTab domSignals={domSignals} features={features} />}
+        {tab === 'behavior' && <BehaviorTab domSignals={domSignals} features={features} htmlProvided={result.html_provided} />}
       </div>
     </div>
   )
