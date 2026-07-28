@@ -218,8 +218,8 @@ def generate_explanation(result: dict) -> dict:
     expanded_url = result.get("expanded_url") or result.get("effective_url") or ""
     if cr == 1 and expanded_url:
         from api.whitelist import is_whitelisted as _wl
-        from api.predictor import _get_registered_domain
-        final_domain = _get_registered_domain(expanded_url)
+        from api.utils import get_registered_domain as _get_rd
+        final_domain = _get_rd(expanded_url)
         if final_domain and _wl(final_domain):
             findings.append(FINDING_TEMPLATES["redirect_to_whitelisted"].format(dest=final_domain))
         else:
@@ -238,27 +238,32 @@ def generate_explanation(result: dict) -> dict:
         trend = "risk score consistent with this scan" if abs(avg - aggregate_score) < 15 else "previous scans show different risk levels"
         findings.append(FINDING_TEMPLATES["reputation_known"].format(n=n, avg=avg, trend=trend))
 
-    # Build verdict summary
+    # Build verdict summary: focus on WHY, not WHAT (gauge already shows the verdict)
     if final_verdict == "phishing":
         reasons = score_contributors[:3]
         if reasons:
-            summary = f"This URL is classified as phishing (score: {aggregate_score:.0f}/100) due to {reasons[0].lower()}"
+            head = reasons[0][0].upper() + reasons[0][1:]
+            summary = f"{head} triggered the highest alert"
             if len(reasons) > 1:
-                summary += f", along with {reasons[1].lower()}"
+                summary += f", compounded by {reasons[1].lower()}"
             summary += "."
         else:
-            summary = f"This URL is classified as phishing (score: {aggregate_score:.0f}/100) based on multi-engine analysis."
+            summary = "Multiple analysis engines converged on a phishing classification — no single dominant factor identified."
     elif final_verdict == "suspicious":
         reasons = score_contributors[:2]
         if reasons:
-            summary = f"This URL is suspicious (score: {aggregate_score:.0f}/100) — {reasons[0].lower()}"
+            head = reasons[0][0].upper() + reasons[0][1:]
+            summary = f"{head} raises concern"
             if len(reasons) > 1:
-                summary += f" and {reasons[1].lower()}"
-            summary += " suggest caution."
+                summary += f", together with {reasons[1].lower()}"
+            summary += "."
         else:
-            summary = f"This URL is suspicious (score: {aggregate_score:.0f}/100). Some signals warrant verification before interaction."
+            summary = f"{'Some signals'} warrant verification before interaction — score: {aggregate_score:.0f}/100."
     else:
-        summary = f"This URL appears safe (score: {aggregate_score:.0f}/100) — no significant phishing indicators detected across {total_engines} analysis engines."
+        if total_engines > 0:
+            summary = f"All {total_engines} analysis engines returned benign — no phishing indicators detected."
+        else:
+            summary = "No phishing indicators detected."
 
     # Recommendations
     if final_verdict == "phishing":

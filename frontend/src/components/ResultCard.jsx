@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const WHITELIST_DOMAINS = [
   'google.com', 'googleapis.com', 'googleusercontent.com',
@@ -1004,6 +1004,24 @@ function ResultCard({ result }) {
   )
 }
 
+function TypewriterText({ text, speed }) {
+  const [displayed, setDisplayed] = useState('')
+  const [done, setDone] = useState(false)
+  useEffect(() => {
+    if (!text) { setDisplayed(''); setDone(true); return }
+    setDisplayed('')
+    setDone(false)
+    let i = 0
+    const timer = setInterval(() => {
+      i++
+      setDisplayed(text.slice(0, i))
+      if (i >= text.length) { clearInterval(timer); setDone(true) }
+    }, speed || 12)
+    return () => clearInterval(timer)
+  }, [text, speed])
+  return <>{displayed}{!done && <span style={{ opacity: 0.6 }}>|</span>}</>
+}
+
 function CopilotTab({ result, explanation, confidence, barColor }) {
   const [activeQuestion, setActiveQuestion] = useState(null)
   const exp = explanation || {}
@@ -1077,7 +1095,9 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
           </button>
           {activeQuestion === i && (
             <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid #1e2a45' }}>
-              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{faq.a}</p>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                <TypewriterText text={faq.a} speed={10} />
+              </p>
             </div>
           )}
         </div>
@@ -1094,7 +1114,8 @@ function FeedbackButton({ result }) {
     if (sending || submitted) return
     setSending(true)
     try {
-      const res = await fetch('http://127.0.0.1:5000/feedback', {
+      const apiUrl = import.meta.env.VITE_API_URL || '/api'
+      const res = await fetch(`${apiUrl}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

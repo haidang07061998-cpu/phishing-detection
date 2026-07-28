@@ -16,6 +16,7 @@ from src.brand_detection import get_brand_risk_score
 from api.reputation import get_domain_reputation, update_domain_reputation
 from api.explainer import generate_explanation
 from api.whitelist import is_whitelisted as _is_whitelisted_domain, maybe_add_dynamic as _maybe_add_dynamic
+from api.utils import get_registered_domain as _get_registered_domain, get_subdomain_info as _get_subdomain_info
 
 PROJECT = Path(__file__).resolve().parents[1]
 MODEL_DIR = PROJECT / "data" / "models"
@@ -36,60 +37,6 @@ SAFE_COUNTRY_TLDS = {
     ".ch", ".at", ".be", ".ie", ".pl", ".cz", ".hu", ".pt",
     ".gov", ".edu", ".mil",
 }
-
-
-def _get_registered_domain(url: str) -> str | None:
-    try:
-        parsed = urlparse(url)
-        domain = (parsed.netloc or parsed.hostname or "").lower()
-        # Remove port
-        domain = domain.split(":")[0]
-        if not domain:
-            return None
-        # Handle IP addresses
-        if re.match(r"^\d+\.\d+\.\d+\.\d+$", domain):
-            return domain
-        # Extract last 2-3 parts (e.g., "google.com" or "co.uk" special cases)
-        parts = domain.split(".")
-        if len(parts) < 2:
-            return domain
-        # Handle common 2-part TLDs like co.uk, com.au
-        two_part_tlds = {"co.uk", "com.au", "co.nz", "co.jp", "co.kr",
-                         "or.jp", "ac.uk", "gov.uk", "org.uk", "net.au",
-                         "com.vn", "co.vn", "com.sg", "com.hk", "com.tw",
-                         "co.id", "or.id", "ac.id", "go.id"}
-        if len(parts) >= 3 and ".".join(parts[-2:]) in two_part_tlds:
-            return ".".join(parts[-3:])
-        return ".".join(parts[-2:])
-    except Exception:
-        return None
-
-
-def _get_subdomain_info(url: str) -> dict | None:
-    try:
-        parsed = urlparse(url)
-        hostname = (parsed.netloc or parsed.hostname or "").lower().split(":")[0]
-        if not hostname:
-            return None
-        if re.match(r"^\d+\.\d+\.\d+\.\d+$", hostname):
-            return None
-        reg_domain = _get_registered_domain(url)
-        if not reg_domain or hostname == reg_domain:
-            return None
-        subdomain = hostname[:-(len(reg_domain) + 1)]
-        if subdomain:
-            sub_parts = subdomain.split(".")
-            if sub_parts and sub_parts[-1] in ("www", "mail", "smtp", "api", "cdn", "ftp", "webmail", "m", "app", "dev", "test", "beta"):
-                return None
-            return {
-                "full_hostname": hostname,
-                "registered_domain": reg_domain,
-                "subdomain": subdomain,
-                "parts": sub_parts,
-            }
-    except Exception:
-        return None
-    return None
 
 
 TEMPERATURE = 2.8

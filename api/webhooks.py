@@ -54,10 +54,14 @@ def dispatch(event: str, payload: dict) -> None:
         return
     if event not in cfg.get("events", []):
         return
+    threading.Thread(target=_dispatch_async, args=(cfg["url"], event, payload), daemon=True).start()
+
+
+def _dispatch_async(url: str, event: str, payload: dict) -> None:
     try:
         data = json.dumps({"event": event, "payload": payload}).encode("utf-8")
         req = urllib.request.Request(
-            cfg["url"], data=data,
+            url, data=data,
             headers={"Content-Type": "application/json"},
             method="POST",
         )

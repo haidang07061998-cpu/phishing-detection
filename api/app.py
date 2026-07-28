@@ -1,5 +1,6 @@
 import re
 import ipaddress
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 import threading
 from flask import Flask, request, jsonify
@@ -90,13 +91,23 @@ def predict_batch():
     if len(urls) > MAX_BATCH_SIZE:
         return jsonify({"error": f"Batch size cannot exceed {MAX_BATCH_SIZE}"}), 400
 
-    results = []
-    for url in urls:
+    def _predict_single(url: str) -> dict:
         try:
             with predictor_lock:
-                results.append(predictor.predict(url.strip()))
+                return predictor.predict(url.strip())
         except Exception as e:
-            results.append({"url": url, "error": str(e)})
+            return {"url": url, "error": str(e)}
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(_predict_single, urls))
+
+    for r in results:
+        if "error" not in r:
+            dispatch("scan.completed", {
+                "url": r.get("url", ""),
+                "aggregate_score": r.get("aggregate_score"),
+                "verdict": "phishing" if r.get("aggregate_score", 0) >= 60 else "suspicious" if r.get("aggregate_score", 0) >= 30 else "safe",
+            })
 
     return jsonify({"results": results, "count": len(results)})
 
