@@ -10,6 +10,7 @@ from api.predictor import predictor
 from api.feedback import submit_feedback, get_feedback_stats
 from api.webhooks import set_webhook, delete_webhook, get_webhook, dispatch
 from api.whitelist import get_all as _get_whitelist, add_dynamic as _add_whitelist, remove_dynamic as _remove_whitelist
+from api.llm_explainer import explain as llm_explain
 
 app = Flask(__name__)
 CORS(app)
@@ -203,6 +204,18 @@ def whitelist_remove():
     if not data or "domain" not in data:
         return jsonify({"error": "Missing 'domain' in request body"}), 400
     return jsonify(_remove_whitelist(data["domain"].strip().lower()))
+
+
+@app.route("/explain", methods=["POST"])
+def explain():
+    data = request.get_json(force=True)
+    if not data or "question" not in data or "result" not in data:
+        return jsonify({"error": "Missing 'question' and 'result' in request body"}), 400
+
+    llm_answer = llm_explain(data["result"], data["question"])
+    if llm_answer:
+        return jsonify({"answer": llm_answer, "source": "llm"})
+    return jsonify({"answer": None, "source": "template"})
 
 
 if __name__ == "__main__":

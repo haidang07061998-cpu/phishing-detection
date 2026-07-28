@@ -1024,85 +1024,117 @@ function TypewriterText({ text, speed }) {
 
 function CopilotTab({ result, explanation, confidence, barColor }) {
   const [activeQuestion, setActiveQuestion] = useState(null)
+  const [llmAnswers, setLlmAnswers] = useState({})
+  const [loading, setLoading] = useState({})
   const exp = explanation || {}
   const verdict = confidence >= 0.6 ? 'phishing' : confidence >= 0.3 ? 'suspicious' : 'safe'
 
-  const faqs = [
-    {
-      q: verdict === 'safe' ? 'Why is this URL considered safe?' : 'Why was this URL flagged?',
-      a: exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${verdict} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
-    },
-    {
-      q: 'What are the key findings?',
-      a: exp.key_findings?.length ? exp.key_findings.map((f, i) => `${i + 1}. ${f}`).join('. ') : 'No specific findings beyond the aggregate score.',
-    },
-    {
-      q: 'What should I do next?',
-      a: exp.recommendations?.length ? exp.recommendations.map((r, i) => `${i + 1}. ${r}`).join('. ') : 'No specific recommendations.',
-    },
-    {
-      q: 'How trustworthy is this domain?',
-      a: (() => {
-        const rep = result.reputation || {}
-        if (rep.scans > 0) {
-          return `This domain has been scanned ${rep.scans} time(s) with an average score of ${rep.avg_score?.toFixed(0) || 'N/A'}/100 and a phishing rate of ${((rep.phishing_rate || 0) * 100).toFixed(0)}%. ${rep.scans > 1 ? 'The historical data provides a baseline for comparison.' : 'More scans will improve confidence in the reputation.'}`
-        }
-        return 'This is the first scan of this domain. No historical reputation data is available yet — the current score reflects the multi-engine analysis only.'
-      })(),
-    },
-    {
-      q: 'Is this a known attack pattern?',
-      a: (() => {
-        const parts = []
-        const brand = result.brand_analysis || {}
-        if (brand.has_brand_impersonation) {
-          parts.push('Yes — brand impersonation detected targeting ' + (brand.brands_detected?.join(', ') || 'a known brand'))
-        }
-        const sub = result.subdomain_info
-        if (sub) {
-          parts.push(`The URL uses subdomain "${sub.subdomain}" on registered domain "${sub.registered_domain}" — a common technique where attackers host phishing pages on legitimate domain infrastructure`)
-        }
-        if (result.suspicious_tld) {
-          parts.push('The TLD is known to be disproportionately used in phishing campaigns')
-        }
-        if (result.is_shortener) {
-          parts.push('The URL uses a link shortener, which can obscure the final destination')
-        }
-        return parts.length ? parts.join('. ') + '.' : 'No specific known attack patterns detected beyond the general risk scoring.'
-      })(),
-    },
+  const templateAnswers = [
+    exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${verdict} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
+    exp.key_findings?.length ? exp.key_findings.map((f, i) => `${i + 1}. ${f}`).join('. ') : 'No specific findings beyond the aggregate score.',
+    exp.recommendations?.length ? exp.recommendations.map((r, i) => `${i + 1}. ${r}`).join('. ') : 'No specific recommendations.',
+    (() => {
+      const rep = result.reputation || {}
+      if (rep.scans > 0) {
+        return `This domain has been scanned ${rep.scans} time(s) with an average score of ${rep.avg_score?.toFixed(0) || 'N/A'}/100 and a phishing rate of ${((rep.phishing_rate || 0) * 100).toFixed(0)}%. ${rep.scans > 1 ? 'The historical data provides a baseline for comparison.' : 'More scans will improve confidence in the reputation.'}`
+      }
+      return 'This is the first scan of this domain. No historical reputation data is available yet — the current score reflects the multi-engine analysis only.'
+    })(),
+    (() => {
+      const parts = []
+      const brand = result.brand_analysis || {}
+      if (brand.has_brand_impersonation) {
+        parts.push('Yes — brand impersonation detected targeting ' + (brand.brands_detected?.join(', ') || 'a known brand'))
+      }
+      const sub = result.subdomain_info
+      if (sub) {
+        parts.push(`The URL uses subdomain "${sub.subdomain}" on registered domain "${sub.registered_domain}" — a common technique where attackers host phishing pages on legitimate domain infrastructure`)
+      }
+      if (result.suspicious_tld) {
+        parts.push('The TLD is known to be disproportionately used in phishing campaigns')
+      }
+      if (result.is_shortener) {
+        parts.push('The URL uses a link shortener, which can obscure the final destination')
+      }
+      return parts.length ? parts.join('. ') + '.' : 'No specific known attack patterns detected beyond the general risk scoring.'
+    })(),
   ]
+
+  const faqs = [
+    { q: verdict === 'safe' ? 'Why is this URL considered safe?' : 'Why was this URL flagged?' },
+    { q: 'What are the key findings?' },
+    { q: 'What should I do next?' },
+    { q: 'How trustworthy is this domain?' },
+    { q: 'Is this a known attack pattern?' },
+  ]
+
+  const fetchLlmAnswer = async (i) => {
+    if (llmAnswers[i] || loading[i]) return
+    setLoading(prev => ({ ...prev, [i]: true }))
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || '/api'
+      const res = await fetch(`${apiUrl}/explain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: faqs[i].q, result }),
+      })
+      const data = await res.json()
+      if (data.source === 'llm') {
+        setLlmAnswers(prev => ({ ...prev, [i]: data.answer }))
+      }
+    } catch (e) { /* fall back to template */ }
+    setLoading(prev => ({ ...prev, [i]: false }))
+  }
+
+  const handleClick = (i) => {
+    if (activeQuestion === i) { setActiveQuestion(null); return }
+    setActiveQuestion(i)
+    fetchLlmAnswer(i)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
       <p style={{ margin: '0 0 0.5rem', color: '#94a3b8', fontSize: '0.75rem', lineHeight: '1.5' }}>
         Ask questions about this analysis. Click a question to expand the answer.
       </p>
-      {faqs.map((faq, i) => (
-        <div key={i} style={{
-          borderRadius: '8px', overflow: 'hidden',
-          border: `1px solid ${activeQuestion === i ? barColor + '44' : '#1e2a45'}`,
-          transition: 'border 0.15s',
-        }}>
-          <button onClick={() => setActiveQuestion(activeQuestion === i ? null : i)} style={{
-            width: '100%', padding: '0.6rem 0.75rem', border: 'none', background: '#0b0f19',
-            color: '#e2e8f0', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
-            textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      {faqs.map((faq, i) => {
+        const displayText = llmAnswers[i] || templateAnswers[i]
+        const isLoading = loading[i]
+        return (
+          <div key={i} style={{
+            borderRadius: '8px', overflow: 'hidden',
+            border: `1px solid ${activeQuestion === i ? barColor + '44' : '#1e2a45'}`,
+            transition: 'border 0.15s',
           }}>
-            <span>{faq.q}</span>
-            <span style={{ color: '#64748b', fontSize: '0.7rem', transform: activeQuestion === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
-              {'\u25BC'}
-            </span>
-          </button>
-          {activeQuestion === i && (
-            <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid #1e2a45' }}>
-              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                <TypewriterText text={faq.a} speed={10} />
-              </p>
-            </div>
-          )}
-        </div>
-      ))}
+            <button onClick={() => handleClick(i)} style={{
+              width: '100%', padding: '0.6rem 0.75rem', border: 'none', background: '#0b0f19',
+              color: '#e2e8f0', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+              textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span>{faq.q}</span>
+              <span style={{ color: '#64748b', fontSize: '0.7rem', transform: activeQuestion === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+                {'\u25BC'}
+              </span>
+            </button>
+            {activeQuestion === i && (
+              <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid #1e2a45' }}>
+                {isLoading ? (
+                  <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>...</p>
+                ) : (
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                    <TypewriterText text={displayText} speed={10} key={llmAnswers[i] ? `llm-${i}` : `tmpl-${i}`} />
+                  </p>
+                )}
+                {llmAnswers[i] && (
+                  <p style={{ margin: '0.35rem 0 0', color: '#64748b', fontSize: '0.65rem', textAlign: 'right' }}>
+                    Gemini AI
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
