@@ -13,4 +13,4 @@ python-whois
 cryptography
 requests
 tqdm
-google-generativeai
+google-genai
