@@ -1,154 +1,173 @@
-# Phishing Detection - Multimodal Gated Fusion
+# Phishing Detection System — Multi-Engine MVP
 
-A deep learning system for phishing URL detection combining structural URL features, HTML DOM analysis, and ModernBERT-based text understanding via a learnable gated fusion mechanism.
+Gated Fusion deep learning model + 4 rule-based engines + adaptive defenses for phishing URL detection. F1=0.977, AUC=0.993.
 
-## Project Structure
+## Architecture
 
-`
-phishing-detection/
-├── api/                    # Flask REST API for inference
-│   ├── app.py              # Routes: /health, /predict, /predict/batch
-│   ├── predictor.py        # PhishingPredictor: loads checkpoint + runs inference
-│   └── requirements.txt    # API dependencies
-├── data/
-│   ├── raw/                # Immutable source data (ISCX-URL2016 + Mendeley)
-│   ├── processed/          # Preprocessed features (CSV, JSONL)
-│   ├── cache/              # DNS/WHOIS query cache
-│   └── models/             # Trained checkpoints + evaluation results
-├── frontend/               # React + Vite SPA
-├── src/                    # Python source code
-│   ├── features/           # Feature extractors (URL, DNS, SSL, DOM, Brand)
-│   ├── models/             # PyTorch model definitions
-│   ├── training/           # Training scripts (5-fold CV)
-│   ├── evaluation/         # Evaluation scripts
-│   ├── explainability/     # SHAP analysis module
-│   └── brand_detection/    # Brand impersonation detection
-├── kaggle_baseline1.ipynb  # TabTransformer on ISCX-URL2016
-├── kaggle_baseline2.ipynb  # TabTransformer on Mendeley URL
-├── kaggle_proposed.ipynb   # Gated Fusion (URL + ModernBERT + DOM)
-├── kaggle_compare.ipynb    # Comparison of all 3 models
-├── results/                # Figures and evaluation charts
-├── docker/                 # Docker configuration
-├── AGENTS.md               # AI assistant context
-└── README.md               # This file
-`
+```
+User ──→ Frontend (React/Vite :3000)
+              │ POST /api/predict
+              ▼
+          Flask API (:5000)
+              │
+        ┌─────┼──────┬──────────┐
+        ▼     ▼      ▼          ▼
+    AI Model  DNS   URL Pattern Brand
+    (weight 4)(w=2)  (w=2)     (w=1)
+        │     │      │          │
+        └─────┴──────┴──────────┘
+              ▼
+      combine_engines()
+      (weighted voting)
+              │
+        ┌─────┼──────┬──────────┐
+        ▼     ▼      ▼          ▼
+    Explainer Reputation Feedback Webhook
+              │
+        ┌─────┘
+        ▼
+    Adaptive Whitelist
+```
+
+**Gated Fusion** — 3 branches:
+- **TabTransformer** (12 URL features → 128-dim)
+- **ModernBERT** (HTML text → 768-dim CLS)
+- **DOM Projector** (64 structural features)
+- Temperature scaling T=2.8
+
+**4 Virtual Engines** (weighted voting):
+| Engine | Weight | What it checks |
+|--------|--------|----------------|
+| AI Model | 4 | Gated Fusion output + gradient-based feature importance |
+| DNS Infrastructure | 2 | DNS records, SSL cert, domain age, ASN reputation |
+| URL Pattern | 2 | Entropy, suspicious TLD, keywords, redirects, shorteners |
+| Brand | 1 | Brand name impersonation in URL/page text |
+
+## Quick Start
+
+```bash
+# API
+$env:PYTHONIOENCODING='utf-8'
+python -m api.app
+
+# Frontend (separate terminal)
+cd frontend && npm run dev
+```
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/predict` | Analyze a URL (optional `html`) |
+| POST | `/predict/batch` | Batch analyze up to 50 URLs |
+| POST | `/domain` | Domain-only lookup (DNS + engines) |
+| POST | `/ip` | IP-only lookup |
+| POST | `/feedback` | Submit FP/FN correction |
+| GET | `/feedback/stats` | Feedback statistics |
+| GET/POST/DELETE | `/webhook` | Webhook config for SIEM/SOAR |
+| GET/POST/DELETE | `/whitelist` | Manage trusted domain list |
+
+### /predict Response
+
+```json
+{
+  "url": "https://example.com",
+  "phishing_probability": 0.023,
+  "is_phishing": false,
+  "aggregate_score": 8.3,
+  "engine_results": {
+    "final_score": 8.3,
+    "final_verdict": "safe",
+    "engines": {
+      "ai_model": { "score": 5, "verdict": "safe", "details": "...", "confidence": 0.977 },
+      "dns_infrastructure": { "score": 10, "verdict": "safe", "details": "..." },
+      "url_pattern": { "score": 5, "verdict": "safe", "details": "..." },
+      "brand": { "score": 0, "verdict": "safe", "details": "..." }
+    }
+  },
+  "reputation": { "scans": 12, "avg_score": 9.2, "phishing_rate": 0.0 },
+  "subdomain_info": null,
+  "explanation": {
+    "verdict_summary": "All 4 analysis engines returned benign — no phishing indicators detected.",
+    "key_findings": ["..."],
+    "risk_factors": [],
+    "recommendations": ["No immediate action required"]
+  },
+  "features": { "url_length": 42, "entropy": 3.8, ... },
+  "brand_analysis": { "has_brand_impersonation": false },
+  "dns_whois": { "a_record_count": 3, "mx_record_count": 1, ... },
+  "ssl_redirect": { "ssl_valid": 1, ... },
+  "suspicious_tld": 0,
+  "is_shortener": false
+}
+```
+
+## System Components
+
+### Adaptive Whitelist (`api/whitelist.py`)
+- 80+ hardcoded trusted domains (Google, Microsoft, GitHub, etc.)
+- Dynamic auto-learned: domains with ≥5 scans and avg_score ≤15 auto-added
+- REST API for manual add/remove
+
+### Reputation (`api/reputation.py`)
+- Per-domain: scan count, average score, phishing rate
+- Thread-safe JSON persistence (`data/cache/reputation.json`)
+- Updated on every prediction
+
+### Explainer (`api/explainer.py`)
+- Template-based natural language generator (no LLM API)
+- Analyzes 15+ signals: brand, DNS, SSL, ASN, entropy, TLD, redirects, subdomains, reputation
+- Returns: verdict_summary, key_findings[], risk_factors[], recommendations[]
+
+### Feedback Loop (`api/feedback.py`)
+- JSONL format (append-only, crash-safe)
+- Labels: `false_positive`, `false_negative`, `correct`
+- Stored in `data/feedback/YYYY-MM-DD.jsonl`
+
+### Webhook (`api/webhooks.py`)
+- Async dispatch via background thread (non-blocking)
+- Event: `scan.completed`
+- POST JSON payload to external SIEM/SOAR endpoint
 
 ## Models (Ablation Study)
-
-Three models form a controlled ablation study:
 
 | Model | Features | Params | Acc | AUC | F1 |
 |-------|----------|--------|-----|-----|-----|
 | Baseline 1 | TabTransformer (29 ISCX feats) | 71K | 0.9858 | 0.9980 | 0.9655 |
-| Baseline 2 | TabTransformer (12 URL feats only) | 71K | 0.8966 | 0.9593 | 0.8578 |
-| Proposed | Gated Fusion (URL 12 + ModernBERT 768 + DOM 64) | 32.9M | 0.9770 | 0.9928 | 0.9770 |
+| Baseline 2 | TabTransformer (12 URL feats) | 71K | 0.8966 | 0.9593 | 0.8578 |
+| **Proposed** | **Gated Fusion (URL + ModernBERT + DOM)** | **32.9M** | **0.9770** | **0.9928** | **0.9770** |
 
-### Baseline 1 - TabTransformer on ISCX-URL2016
-- 29 tabular features (27 numerical + 2 categorical) from ISCX-URL2016
-- 5-fold stratified CV, 50 epochs, AdamW lr=1e-3
-- Strongest tabular baseline with all engineered features
+## Frontend
 
-### Baseline 2 - TabTransformer on Mendeley URL only
-- 12 URL structural features only (padded to 29 dims as controlled ablation)
-- Same architecture as Baseline 1 for fair comparison
-- Demonstrates performance ceiling of URL-only approaches
+React + Vite with 4 tabs:
+- **Overview** — Calibrated gauge (0-100), engine breakdown bar chart, analysis summary card, historical reputation
+- **Details** — Feature table, feature importance, subdomain note, ASN/PTR with color badges
+- **Behavior** — DOM signals table, banner when HTML not provided
+- **AI Copilot** — 5 preset Q&A with typing animation, uses live result data
 
-### Proposed - Gated Fusion (URL + ModernBERT + DOM)
-- TabTransformer encodes 12 URL features into 128-dim embedding
-- ModernBERT encodes HTML text into 768-dim CLS vector
-- DOM projector encodes 64 structural DOM features
-- Gated Fusion learns adaptive weighting of URL vs HTML modalities
-- 3-fold CV (Kaggle GPU quota limitation - see Notes)
-- Early stopping, gradient clipping, per-parameter-group LR
+## Datasets
 
-## Dataset
+- **ISCX-URL2016**: 36,707 rows (7,586 phishing / 29,121 benign)
+- **Mendeley 2021**: 80,000 records (30,000 phishing / 50,000 genuine) + 83,275 HTML files
 
-### ISCX-URL2016
-- 36,707 rows (7,586 phishing / 29,121 benign)
-- 80+ pre-computed URL features
-- Source: University of New Brunswick
+## Training
 
-### Mendeley 2021
-- 80,000 records (30,000 phishing / 50,000 genuine)
-- 83,275 raw HTML files with genuine/ and phishing/ split
-- Contains full page HTML for DOM + text analysis
-- Source: Mendeley Data
-
-## Setup
-
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- PyTorch 2.3+
-- Kaggle account (for GPU training)
-
-### Installation
-`ash
-# Python environment
-pip install -r requirements.txt
-
-# Frontend
-cd frontend && npm install && cd ..
-
-# Download trained models from Kaggle to data/models/
-`
-
-### Quick Start
-`ash
-# Run API server
-='utf-8'
-python -m api.app
-
-# Run frontend (separate terminal)
-cd frontend && npm run dev
-`
-
-### Training (local verification only - use Kaggle for full training)
-`ash
+```bash
+# Local (3-fold for Proposed, 5-fold for baselines)
 python -m src.training.train_baseline1
 python -m src.training.train_baseline2
 python -m src.training.train_proposed
-`
 
-### Evaluation
-`ash
+# Evaluation
 python -m src.evaluation.evaluate
 python -m src.explainability.shap_analysis
-`
+```
 
-## Key Results
+Full training on Kaggle (GPU): `kaggle_proposed.ipynb`
 
-- Proposed model achieves F1=0.9770, outperforming URL-only baseline by 12% in F1
-- Gated fusion successfully learns to weight URL vs HTML modalities per input
-- SHAP analysis (see results/figures/) shows top-5 URL features driving predictions
+## Notes
 
-## Important Notes
-
-### 3-fold vs 5-fold CV
-Baseline 1 and 2 use 5-fold CV. The Proposed model uses 3-fold CV due to ModernBERT's memory requirements under Kaggle's GPU quota (16GB VRAM on T4). This does not invalidate comparison - 3-fold still yields robust estimates with low variance.
-
-### Baseline 2 padding (12 -> 29)
-Baseline 2 pads 12 URL features to 29 dimensions with -1.0 to reuse the same TabTransformer architecture as Baseline 1. This is a controlled ablation choice - the padded dimensions receive zero attention weight after training, making the effective capacity comparable.
-
-### Class Imbalance
-ISCX: 20.7% phishing. Mendeley: 37.5% phishing. Training uses BCEWithLogitsLoss with pos_weight to handle imbalance.
-
-### Unicode on Windows
-Set $env:PYTHONIOENCODING='utf-8' before running Python scripts.
-
-### Windows Defender
-Phishing HTML files may trigger Windows Defender. DOM extractor falls back to zero vector.
-
-## Results
-
-All figures and evaluation results are in results/ and data/models/:
-- results/figures/confusion_matrices.png
-- results/figures/roc_curves.png
-- results/figures/loss_curves.png
-- results/figures/model_comparison.png
-- results/figures/shap_summary.png
-- data/models/evaluation_results.json
-
-## License
-
-Academic project - graduation thesis.
+- Unicode on Windows: set `$env:PYTHONIOENCODING='utf-8'` first
+- Docker không chạy được trên máy — chạy thủ công 2 terminal
+- HTML phishing files may trigger Windows Defender — DOM extractor falls back to zero vector
