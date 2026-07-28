@@ -1,9 +1,7 @@
 import re
 import sys
-import json
 from pathlib import Path
 from urllib.parse import urlparse
-from datetime import datetime
 import numpy as np
 import torch
 
@@ -14,6 +12,7 @@ from src.features.html_dom_extractor import extract_html_features
 from src.features.dns_whois_extractor import extract_dns_whois_features
 from src.features.ssl_redirect_extractor import extract_ssl_redirect_features
 from src.brand_detection import get_brand_risk_score
+from api.reputation import get_domain_reputation, update_domain_reputation
 
 PROJECT = Path(__file__).resolve().parents[1]
 MODEL_DIR = PROJECT / "data" / "models"
@@ -102,19 +101,7 @@ def _get_registered_domain(url: str) -> str | None:
         return None
 
 
-REPUTATION_PATH = PROJECT / "data" / "cache" / "reputation.json"
 TEMPERATURE = 2.8
-
-
-def _load_reputation() -> dict:
-    if REPUTATION_PATH.exists():
-        return json.loads(REPUTATION_PATH.read_text(encoding="utf-8"))
-    return {}
-
-
-def _save_reputation(repo: dict) -> None:
-    REPUTATION_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPUTATION_PATH.write_text(json.dumps(repo, indent=2, default=str), encoding="utf-8")
 
 
 class PhishingPredictor:
@@ -146,27 +133,6 @@ class PhishingPredictor:
             self.model.load_state_dict(ckpt)
         self.model.eval()
         self.tokenizer = self.model.bert.tokenizer
-
-    def _get_reputation(self, domain: str) -> dict:
-        repo = _load_reputation()
-        return repo.get(domain, {})
-
-    def _update_reputation(self, domain: str, score: float, verdict: str) -> None:
-        if not domain:
-            return
-        repo = _load_reputation()
-        entry = repo.get(domain, {"first_seen": "", "last_seen": "", "scans": 0, "scores": [], "verdicts": []})
-        now = datetime.utcnow().isoformat()
-        if not entry["first_seen"]:
-            entry["first_seen"] = now
-        entry["last_seen"] = now
-        entry["scans"] += 1
-        entry["scores"].append(round(score, 1))
-        entry["verdicts"].append(verdict)
-        entry["avg_score"] = round(sum(entry["scores"]) / len(entry["scores"]), 1)
-        entry["phishing_rate"] = round(sum(1 for v in entry["verdicts"] if v in ("phishing",)) / len(entry["verdicts"]), 3)
-        repo[domain] = entry
-        _save_reputation(repo)
 
     def predict(self, url: str, html_content: str | None = None) -> dict:
         brand_info = {"has_brand_impersonation": False, "brands_detected": [],
@@ -206,7 +172,7 @@ class PhishingPredictor:
                     "engine_results": {"final_score": 0.0, "final_verdict": "safe", "engines": {}},
                     "aggregate_score": 0.0,
                     "engine_count": 0,
-                    "reputation": self._get_reputation(reg_domain),
+                    "reputation": get_domain_reputation(reg_domain),
                 }
             effective_url = expanded_url
 
@@ -309,9 +275,9 @@ class PhishingPredictor:
 
         reg_domain = _get_registered_domain(effective_url) or ""
         if reg_domain:
-            self._update_reputation(reg_domain, final_prob * 100,
-                                    combined["final_verdict"])
-        reputation = self._get_reputation(reg_domain) if reg_domain else {}
+            update_domain_reputation(reg_domain, final_prob * 100,
+                                     combined["final_verdict"])
+        reputation = get_domain_reputation(reg_domain) if reg_domain else {}
 
         return {
             "url": url,
@@ -360,7 +326,10 @@ class PhishingPredictor:
             return {"a_record_count": -1, "mx_record_count": -1,
                     "ns_record_count": -1, "ttl": -1,
                     "domain_age_days": -1, "registrar": "",
-                    "is_privacy_protected": -1, "country": ""}
+                    "is_privacy_protected": -1, "country": "",
+                    "resolved_ips": [], "ptr_record": "",
+                    "asn": "", "asn_description": "",
+                    "asn_country": ""}
 
     def _extract_ssl_redirect(self, url: str) -> dict:
         try:
@@ -402,7 +371,7 @@ class PhishingPredictor:
             "url_pattern": url_result,
             "brand": br_result,
         })
-        rep = self._get_reputation(domain)
+        rep = get_domain_reputation(domain)
         return {
             "domain": domain,
             "dns_whois": dns_whois,

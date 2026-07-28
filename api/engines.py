@@ -14,6 +14,37 @@ import re
 from urllib.parse import urlparse
 from src.features.url_extractor import check_suspicious_tld, is_url_shortener
 
+REPUTABLE_ASNS = {
+    "15169",  # Google
+    "16509",  # Amazon
+    "14618",  # Amazon (Virginia)
+    "20547",  # Amazon (Ireland)
+    "8075",   # Microsoft
+    "13335",  # Cloudflare
+    "32934",  # Facebook/Meta
+    "54113",  # Fastly
+    "20940",  # Akamai
+    "16625",  # Akamai
+    "21342",  # Akamai
+    "45102",  # Alibaba Cloud
+    "36492",  # Apple
+    "6185",   # Apple
+    "714",    # Apple
+    "55002",  # Apple
+    "2906",   # Netflix
+    "3",      # MIT
+    "17378",  # VNPT (Vietnam)
+    "7552",   # Viettel (Vietnam)
+    "18403",  # FPT Telecom (Vietnam)
+    "38731",  # Vietcombank / VN banking
+}
+
+RISKY_ASN_KEYWORDS = [
+    "hosting", "vps", "vpn", "proxy", "anonymous",
+    "datacenter", "colo", "dedicated",
+]
+
+
 PHISHING_KEYWORDS = [
     "login", "signin", "verify", "secure", "account", "update",
     "confirm", "authenticate", "password", "credential", "banking",
@@ -67,7 +98,7 @@ def ai_engine(model_prediction: float, tab_features: dict, feature_importance: d
         verdict = "suspicious"
     else:
         verdict = "safe"
-    return {"score": score, "verdict": verdict, "details": "; ".join(details[:4])}
+    return {"score": score, "verdict": verdict, "details": "; ".join(details[:6])}
 
 
 def dns_infra_engine(dns: dict, ssl: dict) -> dict:
@@ -124,6 +155,28 @@ def dns_infra_engine(dns: dict, ssl: dict) -> dict:
     else:
         score += 40
         details.append("No valid SSL certificate")
+    # ASN-based scoring
+    asn = str(dns.get("asn", "")) if dns else ""
+    asn_desc = dns.get("asn_description", "").lower() if dns else ""
+    asn_country = dns.get("asn_country", "") if dns else ""
+    if asn and asn in REPUTABLE_ASNS:
+        score -= 15
+        if asn == "15169":
+            details.append("Google ASN — strong reputation")
+        elif asn == "13335":
+            details.append("Cloudflare ASN — CDN trusted")
+        else:
+            details.append("Known reputable ASN")
+    elif asn_desc:
+        if any(kw in asn_desc for kw in ("google", "cloudflare", "facebook", "amazon", "aws", "microsoft", "azure")):
+            score -= 12
+            details.append(f"Reputable provider: {asn_desc.split('/')[0][:30]}")
+        elif any(kw in asn_desc for kw in RISKY_ASN_KEYWORDS):
+            score += 10
+            details.append(f"Hosting/VPN ASN: {asn_desc.split('/')[0][:30]}")
+    elif not asn:
+        score += 5
+        details.append("No ASN information")
     score = min(score, 99)
     if score >= 60:
         verdict = "phishing"
@@ -131,7 +184,7 @@ def dns_infra_engine(dns: dict, ssl: dict) -> dict:
         verdict = "suspicious"
     else:
         verdict = "safe"
-    return {"score": score, "verdict": verdict, "details": "; ".join(details[:4])}
+    return {"score": score, "verdict": verdict, "details": "; ".join(details[:6])}
 
 
 def url_pattern_engine(url: str, tab_features: dict) -> dict:
@@ -196,7 +249,7 @@ def url_pattern_engine(url: str, tab_features: dict) -> dict:
         verdict = "suspicious"
     else:
         verdict = "safe"
-    return {"score": score, "verdict": verdict, "details": "; ".join(details[:4])}
+    return {"score": score, "verdict": verdict, "details": "; ".join(details[:6])}
 
 
 def brand_engine(url: str, text: str, brand_info: dict) -> dict:
@@ -217,7 +270,7 @@ def brand_engine(url: str, text: str, brand_info: dict) -> dict:
         keyword_hits = [kw for kw in PHISHING_KEYWORDS if kw in url.lower() or (text and kw in text.lower())]
         if keyword_hits:
             score = min(len(keyword_hits) * 10, 50)
-            details.append(f"Phishing keywords: {', '.join(keyword_hits[:4])}")
+            details.append(f"Phishing keywords: {', '.join(keyword_hits[:6])}")
     if score >= 60:
         verdict = "phishing"
     elif score >= 30:
