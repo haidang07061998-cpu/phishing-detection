@@ -1094,6 +1094,15 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      <style>{`
+        @keyframes skeleton-pulse {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.8; }
+        }
+        .skeleton-line {
+          animation: skeleton-pulse 1.5s ease-in-out infinite;
+        }
+      `}</style>
       <p style={{ margin: '0 0 0.5rem', color: '#94a3b8', fontSize: '0.75rem', lineHeight: '1.5' }}>
         Ask questions about this analysis. Click a question to expand the answer.
       </p>
@@ -1119,7 +1128,11 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
             {activeQuestion === i && (
               <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid #1e2a45' }}>
                 {isLoading ? (
-                  <p style={{ margin: 0, color: '#64748b', fontSize: '0.8rem' }}>...</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', padding: '0.1rem 0' }}>
+                    <div className="skeleton-line" style={{ width: '85%', height: '0.7rem', borderRadius: '4px', background: '#1e2a45' }} />
+                    <div className="skeleton-line" style={{ width: '60%', height: '0.7rem', borderRadius: '4px', background: '#1e2a45' }} />
+                    <div className="skeleton-line" style={{ width: '45%', height: '0.7rem', borderRadius: '4px', background: '#1e2a45' }} />
+                  </div>
                 ) : (
                   <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
                     <TypewriterText text={displayText} speed={10} key={llmAnswers[i] ? `llm-${i}` : `tmpl-${i}`} />
@@ -1127,7 +1140,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
                 )}
                 {llmAnswers[i] && (
                   <p style={{ margin: '0.35rem 0 0', color: '#64748b', fontSize: '0.65rem', textAlign: 'right' }}>
-                    Gemini AI
+                    Llama 3.2
                   </p>
                 )}
               </div>
