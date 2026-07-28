@@ -1,6 +1,19 @@
 import os
 import json
+from pathlib import Path
 
+
+def _load_env():
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_env()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 

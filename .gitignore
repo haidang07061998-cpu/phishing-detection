@@ -53,3 +53,7 @@ pred_result*.txt
 _check_*.py
 _debug_*.py
 _test_*.py
+
+# Environment
+.env
+start.ps1
