@@ -4,8 +4,9 @@
 ```
 phishing-detection/
 ├── api/                    # Flask API
-│   ├── app.py              # Flask routes (health, predict, predict/batch)
-│   ├── predictor.py        # PhishingPredictor: loads checkpoint + runs inference
+│   ├── app.py              # Flask routes (health, predict, predict/batch, domain, ip)
+│   ├── predictor.py        # PhishingPredictor: loads checkpoint + runs inference + temperature scaling + reputation
+│   ├── engines.py          # Multi-engine analysis: AI Model, DNS Infra, URL Pattern, Brand
 │   └── requirements.txt    # Python dependencies
 ├── data/
 │   ├── raw/                # Immutable source data
@@ -150,6 +151,35 @@ docker-compose up --build
 - **brand_detection/** - Brand impersonation detection via URL + text matching
 - **evaluation/generate_figures.py** - matplotlib/seaborn charts
 - **evaluation/deep_analysis.py** - Per-class metrics + error analysis
+
+## Multi-Engine Architecture
+`api/engines.py` implements 4 virtual engines with weighted voting:
+- **AI Model** (weight 4): Gated Fusion output + temperature scaling
+- **DNS Infrastructure** (weight 2): DNS records, SSL, domain age
+- **URL Pattern** (weight 2): URL features, TLD, keywords, entropy
+- **Brand Impersonation** (weight 1): Brand name detection
+
+`combine_engines()` returns `final_score` (0-100), `final_verdict`, and per-engine details.
+
+## Temperature Scaling
+`TEMPERATURE = 2.8` in `predictor.py`. Applied to logits before sigmoid: `logits /= self.temperature`.
+
+## Historical Reputation
+`data/cache/reputation.json` stores per-domain scan history (first_seen, last_seen, scans, avg_score, phishing_rate). Updated on every prediction.
+
+## API Response Changes
+New fields in `/predict` response:
+- `engine_results`: { final_score, final_verdict, engines: { name: { score, verdict, details } } }
+- `aggregate_score`: (0-100) combined multi-engine score
+- `engine_count`: number of active engines (0-4)
+- `reputation`: historical scan data for the domain
+
+## Frontend Changes
+- Gauge uses calibrated `aggregate_score` instead of raw sigmoid
+- `EngineResultRow` component shows each engine's score + verdict
+- `ReputationSection` shows historical scan data
+- OverviewTab displays engine breakdown under Advanced Analysis
+- "AI Confidence" → "Risk Score" label with temperature scaling tooltip
 
 ## Class Imbalance
 All training scripts now use `pos_weight` in `BCEWithLogitsLoss`

@@ -397,6 +397,55 @@ function formatFeatureBadge(name, value, whitelisted) {
   return { text: formatted, color: null }
 }
 
+const ENGINE_LABELS = {
+  ai_model: 'AI Model',
+  dns_infrastructure: 'DNS Infrastructure',
+  url_pattern: 'URL Pattern',
+  brand: 'Brand Impersonation',
+}
+
+function EngineResultRow({ name, result }) {
+  const data = result || {}
+  const score = data.score || 0
+  const verdict = data.verdict || 'safe'
+  const details = data.details || 'No data'
+  const color = score >= 60 ? '#ef4444' : score >= 30 ? '#eab308' : '#10b981'
+  const label = ENGINE_LABELS[name] || name
+  return (
+    <div style={{ marginBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+        <span style={{ color: '#8892b0', fontSize: '0.75rem', fontWeight: 600 }}>{label}</span>
+        <span style={{ color, fontSize: '0.8rem', fontWeight: 700 }}>{score}/100</span>
+      </div>
+      <div style={{ width: '100%', height: '6px', background: '#1a2332', borderRadius: '4px', overflow: 'hidden' }}>
+        <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: '4px', transition: 'width 0.6s ease' }} />
+      </div>
+      <span style={{ color: '#64748b', fontSize: '0.65rem' }}>{details}</span>
+    </div>
+  )
+}
+
+function ReputationSection({ reputation }) {
+  if (!reputation || !reputation.scans) return null
+  const avgScore = reputation.avg_score || 0
+  const scanCount = reputation.scans || 0
+  const phishingRate = reputation.phishing_rate || 0
+  const lastSeen = reputation.last_seen ? new Date(reputation.last_seen).toLocaleString() : 'N/A'
+  return (
+    <div style={{ padding: '0.75rem', borderRadius: '8px', background: '#0b0f19', border: '1px solid #1e2a45', marginTop: '0.75rem' }}>
+      <p style={{ margin: '0 0 0.35rem', color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+        Historical Reputation
+      </p>
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.78rem' }}>
+        <div><span style={{ color: '#64748b' }}>Scans: </span><span style={{ color: '#fff', fontWeight: 600 }}>{scanCount}</span></div>
+        <div><span style={{ color: '#64748b' }}>Avg Score: </span><span style={{ color: avgScore >= 60 ? '#ef4444' : avgScore >= 30 ? '#eab308' : '#10b981', fontWeight: 600 }}>{avgScore.toFixed(1)}</span></div>
+        <div><span style={{ color: '#64748b' }}>Phishing Rate: </span><span style={{ color: phishingRate > 0.5 ? '#ef4444' : '#10b981', fontWeight: 600 }}>{(phishingRate * 100).toFixed(1)}%</span></div>
+        <div><span style={{ color: '#64748b' }}>Last: </span><span style={{ color: '#8892b0', fontWeight: 600 }}>{lastSeen}</span></div>
+      </div>
+    </div>
+  )
+}
+
 function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance, confidence }) {
   const suspTld = result.suspicious_tld
   const isShort = result.is_shortener
@@ -558,6 +607,20 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               </p>
             </div>
           )}
+          {result.engine_results?.engines && Object.keys(result.engine_results.engines).length > 0 && (
+            <div style={{
+              padding: '0.75rem', borderRadius: '8px',
+              background: '#0b0f19', border: '1px solid #1e2a45', marginBottom: '0.75rem',
+            }}>
+              <p style={{ margin: '0 0 0.5rem', color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Engine Results ({result.engine_count || Object.keys(result.engine_results.engines).length})
+              </p>
+              {Object.entries(result.engine_results.engines).map(([name, data]) => (
+                <EngineResultRow key={name} name={name} result={data} />
+              ))}
+            </div>
+          )}
+          <ReputationSection reputation={result.reputation} />
         </div>
 
         <div>
@@ -571,7 +634,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
               <tbody>
                 {[
-                  { label: 'AI Confidence', value: `${pct}%`, color: barColor, tooltip: 'Raw output from Gated Fusion model. Sigmoid activation never returns absolute 0 — final decision is determined by the Whitelist Override Layer.' },
+                  { label: 'Risk Score', value: `${pct}%`, color: barColor, tooltip: 'Calibrated multi-engine score (Temperature Scaling T=2.8 + weighted voting). Replaces raw sigmoid output for decision-making.' },
                   { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : '#64748b' },
                   { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
                   { label: 'Redirect', value: (() => {
@@ -590,7 +653,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                   { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#10b981' },
                   { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : '#64748b' },
                   { label: 'Features Extracted', value: `${features.length} signals`, color: '#c4d1ec' },
-                  { label: 'Model', value: 'Gated Fusion v2', color: '#c4d1ec' },
+                  { label: 'Model', value: 'Multi-Engine (4)', color: '#c4d1ec' },
                   { label: 'Scan Time', value: scanTime, color: '#64748b' },
                 ].map((row, i) => (
                   <tr key={i}>
@@ -802,7 +865,8 @@ function ResultCard({ result }) {
   if (result.type === 'domain') return <DomainResult result={result} />
   if (result.type === 'ip') return <IpResult result={result} />
 
-  const confidence = result.phishing_probability
+  const calibratedScore = (result.aggregate_score != null ? result.aggregate_score : result.phishing_probability * 100) / 100
+  const confidence = calibratedScore
   const pct = (confidence * 100).toFixed(1)
 
   const barColor = confidence >= 0.6 ? '#ef4444' : confidence >= 0.3 ? '#eab308' : '#10b981'

@@ -1,7 +1,9 @@
 import re
 import sys
+import json
 from pathlib import Path
 from urllib.parse import urlparse
+from datetime import datetime
 import numpy as np
 import torch
 
@@ -100,10 +102,24 @@ def _get_registered_domain(url: str) -> str | None:
         return None
 
 
+REPUTATION_PATH = PROJECT / "data" / "cache" / "reputation.json"
+TEMPERATURE = 2.8
+
+
+def _load_reputation() -> dict:
+    if REPUTATION_PATH.exists():
+        return json.loads(REPUTATION_PATH.read_text(encoding="utf-8"))
+    return {}
+
+
+def _save_reputation(repo: dict) -> None:
+    REPUTATION_PATH.parent.mkdir(parents=True, exist_ok=True)
+    REPUTATION_PATH.write_text(json.dumps(repo, indent=2, default=str), encoding="utf-8")
+
+
 class PhishingPredictor:
-    def __init__(self, checkpoint_path: str | Path | None = None):
+    def __init__(self, checkpoint_path: str | Path | None = None, temperature: float = TEMPERATURE):
         if checkpoint_path is None:
-            # Use first available fold checkpoint
             fold_ckpts = sorted(MODEL_DIR.glob("proposed_fold*_best.pt"))
             if fold_ckpts:
                 checkpoint_path = str(fold_ckpts[0])
@@ -114,6 +130,7 @@ class PhishingPredictor:
                 )
         self.checkpoint_path = Path(checkpoint_path)
         self.device = DEVICE
+        self.temperature = temperature
 
         if not self.checkpoint_path.exists():
             raise FileNotFoundError(
@@ -129,6 +146,27 @@ class PhishingPredictor:
             self.model.load_state_dict(ckpt)
         self.model.eval()
         self.tokenizer = self.model.bert.tokenizer
+
+    def _get_reputation(self, domain: str) -> dict:
+        repo = _load_reputation()
+        return repo.get(domain, {})
+
+    def _update_reputation(self, domain: str, score: float, verdict: str) -> None:
+        if not domain:
+            return
+        repo = _load_reputation()
+        entry = repo.get(domain, {"first_seen": "", "last_seen": "", "scans": 0, "scores": [], "verdicts": []})
+        now = datetime.utcnow().isoformat()
+        if not entry["first_seen"]:
+            entry["first_seen"] = now
+        entry["last_seen"] = now
+        entry["scans"] += 1
+        entry["scores"].append(round(score, 1))
+        entry["verdicts"].append(verdict)
+        entry["avg_score"] = round(sum(entry["scores"]) / len(entry["scores"]), 1)
+        entry["phishing_rate"] = round(sum(1 for v in entry["verdicts"] if v in ("phishing",)) / len(entry["verdicts"]), 3)
+        repo[domain] = entry
+        _save_reputation(repo)
 
     def predict(self, url: str, html_content: str | None = None) -> dict:
         brand_info = {"has_brand_impersonation": False, "brands_detected": [],
@@ -148,13 +186,15 @@ class PhishingPredictor:
             final_domain = _get_registered_domain(expanded_url)
             if final_domain and final_domain in WHITELIST_DOMAINS:
                 redirect_whitelisted = True
+                tab_features = self._get_feature_summary(self._extract_tabular(url))
+                reg_domain = _get_registered_domain(expanded_url) or ""
                 return {
                     "url": url,
                     "phishing_probability": 0.001,
                     "is_phishing": False,
                     "html_provided": html_content is not None,
                     "brand_analysis": get_brand_risk_score(expanded_url, ""),
-                    "features": self._get_feature_summary(self._extract_tabular(url)),
+                    "features": tab_features,
                     "whitelisted": True,
                     "redirect_whitelisted": True,
                     "dns_whois": dns_whois,
@@ -163,6 +203,10 @@ class PhishingPredictor:
                     "is_shortener": is_short,
                     "expanded_url": expanded_url,
                     "effective_url": expanded_url,
+                    "engine_results": {"final_score": 0.0, "final_verdict": "safe", "engines": {}},
+                    "aggregate_score": 0.0,
+                    "engine_count": 0,
+                    "reputation": self._get_reputation(reg_domain),
                 }
             effective_url = expanded_url
 
@@ -173,13 +217,15 @@ class PhishingPredictor:
 
         if is_whitelisted:
             brand_info = get_brand_risk_score(url, "")
+            tab_features = self._get_feature_summary(self._extract_tabular(url))
+            reg_domain = _get_registered_domain(effective_url) or ""
             return {
                 "url": url,
                 "phishing_probability": 0.001,
                 "is_phishing": False,
                 "html_provided": html_content is not None,
                 "brand_analysis": brand_info,
-                "features": self._get_feature_summary(self._extract_tabular(url)),
+                "features": tab_features,
                 "whitelisted": True,
                 "redirect_whitelisted": False,
                 "dns_whois": dns_whois,
@@ -187,6 +233,10 @@ class PhishingPredictor:
                 "suspicious_tld": susp_tld,
                 "is_shortener": is_short,
                 "expanded_url": expanded_url if expanded_url else None,
+                "engine_results": {"final_score": 0.0, "final_verdict": "safe", "engines": {}},
+                "aggregate_score": 0.0,
+                "engine_count": 0,
+                "reputation": self._get_reputation(reg_domain),
             }
 
         self.model.eval()
@@ -209,6 +259,8 @@ class PhishingPredictor:
             tokens["attention_mask"].to(DEVICE),
             dom_tensor,
         )
+        # Temperature scaling before sigmoid
+        logits = logits / self.temperature
         prob = torch.sigmoid(logits)
         prob_val = prob.item()
 
@@ -217,17 +269,14 @@ class PhishingPredictor:
             a_count = dns_whois.get("a_record_count", -1)
             mx_count = dns_whois.get("mx_record_count", -1)
             ssl_ok = ssl_redirect.get("ssl_valid", -1) == 1
-            # Strong infrastructure: CDN/redundancy (A>=2) + email (MX>=1) + valid SSL
             strong_infra = a_count >= 2 and mx_count >= 1 and ssl_ok
-            # CDN-scale (A>=3) alone with SSL is strong evidence (phishing rare on CDN)
             cdn_scale = a_count >= 3 and ssl_ok
-            # Country TLD with any infra
-            country_tld = a_count >= 1 and ssl_ok
             if strong_infra or cdn_scale:
                 prob_val = min(prob_val, 0.15)
-            elif country_tld:
+            else:
                 domain = _get_registered_domain(effective_url)
-                if domain and any(domain.endswith(t) for t in SAFE_COUNTRY_TLDS):
+                if domain and a_count >= 1 and ssl_ok and \
+                   any(domain.endswith(t) for t in SAFE_COUNTRY_TLDS):
                     prob_val = min(prob_val, 0.15)
 
         self.model.zero_grad()
@@ -242,14 +291,36 @@ class PhishingPredictor:
         brand_info = get_brand_risk_score(effective_url, clean_text)
         dom_signals = self._extract_dom_signals(dom_vec)
 
+        # Multi-engine analysis
+        from api.engines import ai_engine, dns_infra_engine, url_pattern_engine, brand_engine, combine_engines
+
+        tab_features = self._get_feature_summary(tab_vec)
+        ai_result = ai_engine(prob_val, tab_features, feature_importance, dns_whois, ssl_redirect)
+        dns_result = dns_infra_engine(dns_whois, ssl_redirect)
+        url_result = url_pattern_engine(effective_url, tab_features)
+        br_result = brand_engine(effective_url, clean_text, brand_info)
+        combined = combine_engines({
+            "ai_model": ai_result,
+            "dns_infrastructure": dns_result,
+            "url_pattern": url_result,
+            "brand": br_result,
+        })
+        final_prob = combined["final_score"] / 100.0
+
+        reg_domain = _get_registered_domain(effective_url) or ""
+        if reg_domain:
+            self._update_reputation(reg_domain, final_prob * 100,
+                                    combined["final_verdict"])
+        reputation = self._get_reputation(reg_domain) if reg_domain else {}
+
         return {
             "url": url,
             "effective_url": effective_url if effective_url != url else None,
             "phishing_probability": round(prob_val, 4),
-            "is_phishing": prob_val >= 0.5,
+            "is_phishing": final_prob >= 0.5,
             "html_provided": html_content is not None,
             "brand_analysis": brand_info,
-            "features": self._get_feature_summary(tab_vec),
+            "features": tab_features,
             "feature_importance": feature_importance,
             "whitelisted": False,
             "redirect_whitelisted": False,
@@ -259,6 +330,10 @@ class PhishingPredictor:
             "suspicious_tld": susp_tld,
             "is_shortener": is_short,
             "expanded_url": expanded_url if expanded_url else None,
+            "engine_results": combined,
+            "aggregate_score": combined["final_score"],
+            "engine_count": len(combined["engines"]),
+            "reputation": reputation if reputation else {},
         }
 
     def _get_feature_summary(self, tab_vec: np.ndarray) -> dict:
@@ -317,23 +392,51 @@ class PhishingPredictor:
     def lookup_domain(self, domain: str) -> dict:
         url = f"https://{domain}"
         dns_whois = self._extract_dns_whois(url)
+        from api.engines import dns_infra_engine, url_pattern_engine, brand_engine, combine_engines
+        dns_result = dns_infra_engine(dns_whois, {})
+        url_result = url_pattern_engine(url, {})
+        br_result = brand_engine(url, "", None)
+        combined = combine_engines({
+            "ai_model": {"score": 0, "verdict": "safe", "details": "No model inference"},
+            "dns_infrastructure": dns_result,
+            "url_pattern": url_result,
+            "brand": br_result,
+        })
+        rep = self._get_reputation(domain)
         return {
             "domain": domain,
             "dns_whois": dns_whois,
             "suspicious_tld": check_suspicious_tld(url),
             "type": "domain",
+            "engine_results": combined,
+            "aggregate_score": combined["final_score"],
+            "engine_count": len(combined["engines"]),
+            "reputation": rep,
         }
 
     def lookup_ip(self, ip: str) -> dict:
         url = f"http://{ip}"
         dns_whois = self._extract_dns_whois(url)
         ssl_redirect = self._extract_ssl_redirect(f"https://{ip}")
+        from api.engines import dns_infra_engine, url_pattern_engine, brand_engine, combine_engines
+        dns_result = dns_infra_engine(dns_whois, ssl_redirect)
+        url_result = url_pattern_engine(url, {"has_ip_address": 1, "url_length": len(url)})
+        br_result = brand_engine(url, "", None)
+        combined = combine_engines({
+            "ai_model": {"score": 50, "verdict": "suspicious", "details": "IP-based — skipped model"},
+            "dns_infrastructure": dns_result,
+            "url_pattern": url_result,
+            "brand": br_result,
+        })
         return {
             "ip": ip,
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
             "suspicious_tld": 0,
             "type": "ip",
+            "engine_results": combined,
+            "aggregate_score": combined["final_score"],
+            "engine_count": len(combined["engines"]),
         }
 
 
