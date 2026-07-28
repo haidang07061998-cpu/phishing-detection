@@ -101,6 +101,33 @@ def _get_registered_domain(url: str) -> str | None:
         return None
 
 
+def _get_subdomain_info(url: str) -> dict | None:
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.netloc or parsed.hostname or "").lower().split(":")[0]
+        if not hostname:
+            return None
+        if re.match(r"^\d+\.\d+\.\d+\.\d+$", hostname):
+            return None
+        reg_domain = _get_registered_domain(url)
+        if not reg_domain or hostname == reg_domain:
+            return None
+        subdomain = hostname[:-(len(reg_domain) + 1)]
+        if subdomain:
+            sub_parts = subdomain.split(".")
+            if sub_parts and sub_parts[-1] in ("www", "mail", "smtp", "api", "cdn", "ftp", "webmail", "m", "app", "dev", "test", "beta"):
+                return None
+            return {
+                "full_hostname": hostname,
+                "registered_domain": reg_domain,
+                "subdomain": subdomain,
+                "parts": sub_parts,
+            }
+    except Exception:
+        return None
+    return None
+
+
 TEMPERATURE = 2.8
 
 
@@ -148,6 +175,7 @@ class PhishingPredictor:
         effective_url = url
 
         redirect_whitelisted = False
+        subdomain_info = _get_subdomain_info(url)
         if expanded_url:
             final_domain = _get_registered_domain(expanded_url)
             if final_domain and final_domain in WHITELIST_DOMAINS:
@@ -173,6 +201,7 @@ class PhishingPredictor:
                     "aggregate_score": 0.0,
                     "engine_count": 0,
                     "reputation": get_domain_reputation(reg_domain),
+                    "subdomain_info": subdomain_info,
                 }
             effective_url = expanded_url
 
@@ -202,7 +231,8 @@ class PhishingPredictor:
                 "engine_results": {"final_score": 0.0, "final_verdict": "safe", "engines": {}},
                 "aggregate_score": 0.0,
                 "engine_count": 0,
-                "reputation": self._get_reputation(reg_domain),
+                "reputation": get_domain_reputation(reg_domain),
+                "subdomain_info": subdomain_info,
             }
 
         self.model.eval()
@@ -300,6 +330,7 @@ class PhishingPredictor:
             "aggregate_score": combined["final_score"],
             "engine_count": len(combined["engines"]),
             "reputation": reputation if reputation else {},
+            "subdomain_info": subdomain_info,
         }
 
     def _get_feature_summary(self, tab_vec: np.ndarray) -> dict:

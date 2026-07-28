@@ -680,6 +680,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
   const trustedCAOverride = result?.url ? /google\.com|youtube\.com|gmail\.com|github\.com|facebook\.com|microsoft\.com|apple\.com|amazon\.com/i.test(result.url) : false
   const finalUrl = ssl?.final_url || ''
   const extra = { whitelisted, trustedCAOverride, finalUrl }
+  const subInfo = result?.subdomain_info
 
   if (!dns && !ssl) {
     return (
@@ -724,6 +725,19 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
           DNS & WHOIS
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+          {subInfo && (
+            <div style={{
+              padding: '0.5rem 0.6rem', borderRadius: '6px', marginBottom: '0.25rem',
+              background: '#2a2415', border: '1px solid #eab30844',
+            }}>
+              <p style={{ margin: '0 0 0.25rem', color: '#eab308', fontSize: '0.7rem', fontWeight: 700 }}>
+                {'\u26A0'} Subdomain Note
+              </p>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.72rem', lineHeight: '1.5' }}>
+                WHOIS data above belongs to <strong style={{ color: '#fff' }}>{subInfo.registered_domain}</strong>, not the subdomain <strong style={{ color: '#fff' }}>{subInfo.subdomain}</strong>. Subdomain-based phishing is a common evasion technique.
+              </p>
+            </div>
+          )}
           {dns && Object.entries(dns).map(([key, value]) => renderRow(key, value))}
         </div>
       </div>
