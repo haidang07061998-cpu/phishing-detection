@@ -1,23 +1,10 @@
-import os
 import json
 import traceback
-from pathlib import Path
 import urllib.request
 import urllib.error
 
-
-def _load_env():
-    env_path = Path(__file__).resolve().parents[1] / ".env"
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip())
-
-
-_load_env()
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+OLLAMA_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.2:3b"
 
 
 def _build_context(result: dict) -> str:
@@ -62,7 +49,7 @@ def _build_context(result: dict) -> str:
 
 def _ollama_available() -> bool:
     try:
-        req = urllib.request.Request("http://localhost:11434/api/tags", method="GET")
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags", method="GET")
         urllib.request.urlopen(req, timeout=2)
         return True
     except Exception:
@@ -78,9 +65,15 @@ def _explain_ollama(context: str, question: str) -> str | None:
             f"USER QUESTION: {question}\n\n"
             "ANSWER:"
         )
-        body = json.dumps({"model": "llama3.2:3b", "prompt": prompt, "stream": False, "options": {"num_predict": 250, "temperature": 0.3}}).encode()
-        req = urllib.request.Request("http://localhost:11434/api/generate", data=body, headers={"Content-Type": "application/json"}, method="POST")
-        resp = urllib.request.urlopen(req, timeout=30)
+        body = json.dumps({
+            "model": OLLAMA_MODEL, "prompt": prompt, "stream": False,
+            "options": {"num_predict": 250, "temperature": 0.3},
+        }).encode()
+        req = urllib.request.Request(
+            f"{OLLAMA_URL}/api/generate", data=body,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        resp = urllib.request.urlopen(req, timeout=60)
         data = json.loads(resp.read().decode())
         return data.get("response", "").strip() or None
     except Exception:
@@ -88,36 +81,7 @@ def _explain_ollama(context: str, question: str) -> str | None:
         return None
 
 
-def _explain_gemini(context: str, question: str) -> str | None:
-    if not GEMINI_API_KEY:
-        return None
-    try:
-        from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        prompt = (
-            "You are a phishing detection AI assistant. Based on the scan results below, "
-            "answer the user's question concisely in 2-3 sentences. Be specific and use data from the results.\n\n"
-            f"SCAN RESULTS:\n{context}\n\n"
-            f"USER QUESTION: {question}\n\n"
-            "ANSWER:"
-        )
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config={"max_output_tokens": 250, "temperature": 0.3},
-        )
-        return response.text.strip()
-    except Exception:
-        return None
-
-
 def explain(result: dict, question: str) -> str | None:
-    context = _build_context(result)
-
-    if _ollama_available():
-        return _explain_ollama(context, question)
-
-    if GEMINI_API_KEY:
-        return _explain_gemini(context, question)
-
-    return None
+    if not _ollama_available():
+        return None
+    return _explain_ollama(_build_context(result), question)
