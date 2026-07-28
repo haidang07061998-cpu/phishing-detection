@@ -8,6 +8,7 @@ from flask_cors import CORS
 from api.predictor import predictor
 from api.feedback import submit_feedback, get_feedback_stats
 from api.webhooks import set_webhook, delete_webhook, get_webhook, dispatch
+from api.whitelist import get_all as _get_whitelist, add_dynamic as _add_whitelist, remove_dynamic as _remove_whitelist
 
 app = Flask(__name__)
 CORS(app)
@@ -170,6 +171,27 @@ def webhook():
     if not data or "url" not in data:
         return jsonify({"error": "Missing 'url' in request body"}), 400
     return jsonify(set_webhook(data["url"], data.get("events")))
+
+
+@app.route("/whitelist", methods=["GET"])
+def whitelist_get():
+    return jsonify(_get_whitelist())
+
+
+@app.route("/whitelist", methods=["POST"])
+def whitelist_add():
+    data = request.get_json(force=True)
+    if not data or "domain" not in data:
+        return jsonify({"error": "Missing 'domain' in request body"}), 400
+    return jsonify(_add_whitelist(data["domain"].strip().lower()))
+
+
+@app.route("/whitelist", methods=["DELETE"])
+def whitelist_remove():
+    data = request.get_json(force=True)
+    if not data or "domain" not in data:
+        return jsonify({"error": "Missing 'domain' in request body"}), 400
+    return jsonify(_remove_whitelist(data["domain"].strip().lower()))
 
 
 if __name__ == "__main__":

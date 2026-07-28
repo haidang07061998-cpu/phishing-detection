@@ -4,13 +4,14 @@
 ```
 phishing-detection/
 ├── api/                    # Flask API
-│   ├── app.py              # Flask routes (health, predict, predict/batch, domain, ip, feedback, webhook)
-│   ├── predictor.py        # PhishingPredictor: loads checkpoint + runs inference + temperature scaling + reputation
+│   ├── app.py              # Flask routes (health, predict, predict/batch, domain, ip, feedback, webhook, whitelist)
+│   ├── predictor.py        # PhishingPredictor: loads checkpoint + runs inference + temperature scaling + reputation + BERT quantization
 │   ├── engines.py          # Multi-engine analysis: AI Model, DNS Infra, URL Pattern, Brand
 │   ├── explainer.py        # Natural language explanation generator (template-based, no LLM API needed)
 │   ├── reputation.py       # Thread-safe reputation storage (JSON cache with threading.Lock)
 │   ├── feedback.py         # Feedback loop: FP/FN reporting to data/feedback/*.jsonl
 │   ├── webhooks.py         # Webhook config + dispatch to external SIEM/SOAR
+│   ├── whitelist.py        # Adaptive whitelist (static + dynamic auto-learned from reputation)
 │   └── requirements.txt    # Python dependencies
 ├── data/
 │   ├── raw/                # Immutable source data

@@ -15,6 +15,7 @@ from src.features.ssl_redirect_extractor import extract_ssl_redirect_features
 from src.brand_detection import get_brand_risk_score
 from api.reputation import get_domain_reputation, update_domain_reputation
 from api.explainer import generate_explanation
+from api.whitelist import is_whitelisted as _is_whitelisted_domain, maybe_add_dynamic as _maybe_add_dynamic
 
 PROJECT = Path(__file__).resolve().parents[1]
 MODEL_DIR = PROJECT / "data" / "models"
@@ -26,45 +27,6 @@ FEATURE_KEYS = [
     "has_ip_address", "suspicious_keywords", "url_depth", "tld_in_path",
 ]
 TABULAR_DIM = len(FEATURE_KEYS)
-
-WHITELIST_DOMAINS = {
-    # Google
-    "google.com", "googleapis.com", "googleusercontent.com",
-    "gmail.com", "youtube.com", "youtu.be", "blogspot.com",
-    "google.vn",
-    # Microsoft
-    "microsoft.com", "office.com", "office365.com",
-    "live.com", "outlook.com", "azure.com",
-    "github.com", "githubusercontent.com",
-    # Meta
-    "facebook.com", "fb.com", "fbcdn.net",
-    "instagram.com", "whatsapp.com",
-    # Apple
-    "apple.com", "icloud.com",
-    # Amazon
-    "amazon.com", "aws.amazon.com",
-    # Social & Communication
-    "twitter.com", "x.com", "linkedin.com",
-    "telegram.org", "discord.com", "slack.com",
-    # Development
-    "gitlab.com", "bitbucket.org", "npmjs.com",
-    "docker.com", "stackoverflow.com",
-    # Other major
-    "wikipedia.org", "wikimedia.org",
-    "netflix.com", "spotify.com", "adobe.com",
-    "paypal.com", "ebay.com",
-    "zoom.us", "dropbox.com",
-    "cloudflare.com",
-    # Vietnamese major sites
-    "vietnamnet.vn", "vnexpress.net", "tuoitre.vn",
-    "thanhnien.vn", "dantri.com.vn", "nguoiduatin.vn",
-    "vov.vn", "baomoi.com", "cafef.vn", "cafebiz.vn",
-    "zalo.me", "chotot.com", "batdongsan.com.vn",
-    "tiki.vn", "shopee.vn", "thegioididong.com",
-    "vietcombank.com.vn", "techcombank.com.vn",
-    "acb.com.vn", "vpbank.com.vn", "mbbank.com.vn",
-    "vietinbank.vn", "bidv.com.vn",
-}
 
 # Country TLDs with strong regulatory oversight — model may not have seen during training
 SAFE_COUNTRY_TLDS = {
@@ -162,6 +124,24 @@ class PhishingPredictor:
             self.model.load_state_dict(ckpt)
         self.model.eval()
         self.tokenizer = self.model.bert.tokenizer
+        self._maybe_quantize()
+
+    def _maybe_quantize(self) -> None:
+        quant_path = self.checkpoint_path.with_suffix(".quantized.pt")
+        try:
+            if quant_path.exists():
+                state = torch.load(quant_path, map_location=self.device, weights_only=False)
+                self.model.load_state_dict(state, strict=False)
+                self.model.eval()
+                return
+            import torch.ao.quantization as quant
+            self.model.bert.apply(quant.QuantStub())
+            self.model.bert = torch.quantization.quantize_dynamic(
+                self.model.bert, {torch.nn.Linear}, dtype=torch.qint8, inplace=True
+            )
+            torch.save(self.model.state_dict(), quant_path)
+        except Exception:
+            pass
 
     def predict(self, url: str, html_content: str | None = None) -> dict:
         brand_info = {"has_brand_impersonation": False, "brands_detected": [],
@@ -183,7 +163,7 @@ class PhishingPredictor:
         subdomain_info = _get_subdomain_info(url)
         if expanded_url:
             final_domain = _get_registered_domain(expanded_url)
-            if final_domain and final_domain in WHITELIST_DOMAINS:
+            if final_domain and _is_whitelisted_domain(final_domain):
                 redirect_whitelisted = True
                 tab_features = self._get_feature_summary(self._extract_tabular(url))
                 reg_domain = _get_registered_domain(expanded_url) or ""
@@ -214,7 +194,7 @@ class PhishingPredictor:
 
         is_whitelisted = bool(
             _get_registered_domain(effective_url)
-            and _get_registered_domain(effective_url) in WHITELIST_DOMAINS
+            and _is_whitelisted_domain(_get_registered_domain(effective_url))
         )
 
         if is_whitelisted:
@@ -316,7 +296,11 @@ class PhishingPredictor:
         if reg_domain:
             update_domain_reputation(reg_domain, final_prob * 100,
                                      combined["final_verdict"])
-        reputation = get_domain_reputation(reg_domain) if reg_domain else {}
+            reputation = get_domain_reputation(reg_domain)
+            if _maybe_add_dynamic(reputation, reg_domain):
+                pass  # domain auto-added to dynamic whitelist
+        else:
+            reputation = {}
 
         result_dict = {
             "url": url,

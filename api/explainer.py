@@ -217,9 +217,10 @@ def generate_explanation(result: dict) -> dict:
     cr = ssl.get("cross_domain_redirect", -1) if ssl else -1
     expanded_url = result.get("expanded_url") or result.get("effective_url") or ""
     if cr == 1 and expanded_url:
-        from api.predictor import WHITELIST_DOMAINS, _get_registered_domain
+        from api.whitelist import is_whitelisted as _wl
+        from api.predictor import _get_registered_domain
         final_domain = _get_registered_domain(expanded_url)
-        if final_domain and final_domain in WHITELIST_DOMAINS:
+        if final_domain and _wl(final_domain):
             findings.append(FINDING_TEMPLATES["redirect_to_whitelisted"].format(dest=final_domain))
         else:
             findings.append(FINDING_TEMPLATES["cross_domain_redirect"].format(dest=expanded_url[:60]))
