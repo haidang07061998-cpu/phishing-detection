@@ -6,6 +6,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from api.predictor import predictor
+from api.feedback import submit_feedback, get_feedback_stats
+from api.webhooks import set_webhook, delete_webhook, get_webhook, dispatch
 
 app = Flask(__name__)
 CORS(app)
@@ -65,6 +67,11 @@ def predict():
     try:
         with predictor_lock:
             result = predictor.predict(url, html_content)
+        dispatch("scan.completed", {
+            "url": url,
+            "aggregate_score": result.get("aggregate_score"),
+            "verdict": "phishing" if result.get("aggregate_score", 0) >= 60 else "suspicious" if result.get("aggregate_score", 0) >= 30 else "safe",
+        })
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -127,6 +134,42 @@ def ip_lookup():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    data = request.get_json(force=True)
+    if not data or "url" not in data or "feedback_type" not in data:
+        return jsonify({"error": "Missing 'url' and 'feedback_type' in request body"}), 400
+    result = submit_feedback(
+        url=data["url"],
+        feedback_type=data["feedback_type"],
+        actual_verdict=data.get("actual_verdict", ""),
+        predicted_verdict=data.get("predicted_verdict", ""),
+        score=data.get("score", 0),
+        comment=data.get("comment", ""),
+        metadata=data.get("metadata"),
+    )
+    if "error" in result:
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route("/feedback/stats", methods=["GET"])
+def feedback_stats():
+    return jsonify(get_feedback_stats())
+
+
+@app.route("/webhook", methods=["GET", "POST", "DELETE"])
+def webhook():
+    if request.method == "GET":
+        return jsonify(get_webhook())
+    if request.method == "DELETE":
+        return jsonify(delete_webhook())
+    data = request.get_json(force=True)
+    if not data or "url" not in data:
+        return jsonify({"error": "Missing 'url' in request body"}), 400
+    return jsonify(set_webhook(data["url"], data.get("events")))
 
 
 if __name__ == "__main__":

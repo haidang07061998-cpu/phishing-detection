@@ -991,11 +991,147 @@ function ResultCard({ result }) {
           <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
           <TabButton active={tab === 'details'} onClick={() => setTab('details')}>Details</TabButton>
           <TabButton active={tab === 'behavior'} onClick={() => setTab('behavior')}>Behavior</TabButton>
+          {result.explanation && <TabButton active={tab === 'copilot'} onClick={() => setTab('copilot')}>AI Copilot</TabButton>}
         </div>
 
         {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance: result.feature_importance, confidence }} />}
         {tab === 'details' && <DetailsTab dns={dns} ssl={ssl} whitelisted={result.whitelisted} result={result} />}
         {tab === 'behavior' && <BehaviorTab domSignals={domSignals} features={features} htmlProvided={result.html_provided} />}
+        {tab === 'copilot' && <CopilotTab result={result} explanation={result.explanation} confidence={confidence} barColor={barColor} />}
+        <FeedbackButton result={result} />
+      </div>
+    </div>
+  )
+}
+
+function CopilotTab({ result, explanation, confidence, barColor }) {
+  const [activeQuestion, setActiveQuestion] = useState(null)
+  const exp = explanation || {}
+
+  const faqs = [
+    {
+      q: 'Why was this URL flagged?',
+      a: exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${confidence >= 0.6 ? 'phishing' : confidence >= 0.3 ? 'suspicious' : 'safe'} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
+    },
+    {
+      q: 'What are the key findings?',
+      a: exp.key_findings?.length ? exp.key_findings.map((f, i) => `${i + 1}. ${f}`).join('. ') : 'No specific findings beyond the aggregate score.',
+    },
+    {
+      q: 'What should I do next?',
+      a: exp.recommendations?.length ? exp.recommendations.map((r, i) => `${i + 1}. ${r}`).join('. ') : 'No specific recommendations.',
+    },
+    {
+      q: 'How trustworthy is this domain?',
+      a: (() => {
+        const rep = result.reputation || {}
+        if (rep.scans > 0) {
+          return `This domain has been scanned ${rep.scans} time(s) with an average score of ${rep.avg_score?.toFixed(0) || 'N/A'}/100 and a phishing rate of ${((rep.phishing_rate || 0) * 100).toFixed(0)}%. ${rep.scans > 1 ? 'The historical data provides a baseline for comparison.' : 'More scans will improve confidence in the reputation.'}`
+        }
+        return 'This is the first scan of this domain. No historical reputation data is available yet — the current score reflects the multi-engine analysis only.'
+      })(),
+    },
+    {
+      q: 'Is this a known attack pattern?',
+      a: (() => {
+        const parts = []
+        const brand = result.brand_analysis || {}
+        if (brand.has_brand_impersonation) {
+          parts.push('Yes — brand impersonation detected targeting ' + (brand.brands_detected?.join(', ') || 'a known brand'))
+        }
+        const sub = result.subdomain_info
+        if (sub) {
+          parts.push(`The URL uses subdomain "${sub.subdomain}" on registered domain "${sub.registered_domain}" — a common technique where attackers host phishing pages on legitimate domain infrastructure`)
+        }
+        if (result.suspicious_tld) {
+          parts.push('The TLD is known to be disproportionately used in phishing campaigns')
+        }
+        if (result.is_shortener) {
+          parts.push('The URL uses a link shortener, which can obscure the final destination')
+        }
+        return parts.length ? parts.join('. ') + '.' : 'No specific known attack patterns detected beyond the general risk scoring.'
+      })(),
+    },
+  ]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      <p style={{ margin: '0 0 0.5rem', color: '#94a3b8', fontSize: '0.75rem', lineHeight: '1.5' }}>
+        Ask questions about this analysis. Click a question to expand the answer.
+      </p>
+      {faqs.map((faq, i) => (
+        <div key={i} style={{
+          borderRadius: '8px', overflow: 'hidden',
+          border: `1px solid ${activeQuestion === i ? barColor + '44' : '#1e2a45'}`,
+          transition: 'border 0.15s',
+        }}>
+          <button onClick={() => setActiveQuestion(activeQuestion === i ? null : i)} style={{
+            width: '100%', padding: '0.6rem 0.75rem', border: 'none', background: '#0b0f19',
+            color: '#e2e8f0', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+            textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <span>{faq.q}</span>
+            <span style={{ color: '#64748b', fontSize: '0.7rem', transform: activeQuestion === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+              {'\u25BC'}
+            </span>
+          </button>
+          {activeQuestion === i && (
+            <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid #1e2a45' }}>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{faq.a}</p>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function FeedbackButton({ result }) {
+  const [submitted, setSubmitted] = useState(null)
+  const [sending, setSending] = useState(false)
+
+  const sendFeedback = async (type) => {
+    if (sending || submitted) return
+    setSending(true)
+    try {
+      const res = await fetch('http://127.0.0.1:5000/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: result.url,
+          feedback_type: type,
+          predicted_verdict: result.aggregate_score >= 60 ? 'phishing' : result.aggregate_score >= 30 ? 'suspicious' : 'safe',
+          actual_verdict: type === 'false_positive' ? 'safe' : type === 'false_negative' ? 'phishing' : result.aggregate_score >= 60 ? 'phishing' : 'safe',
+          score: result.aggregate_score || 0,
+        }),
+      })
+      if (res.ok) setSubmitted(type)
+    } catch (e) {
+      // silently fail
+    }
+    setSending(false)
+  }
+
+  if (result.whitelisted) return null
+
+  return (
+    <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', borderRadius: '8px', background: '#0b0f19', border: '1px solid #1e2a45' }}>
+      <p style={{ margin: '0 0 0.35rem', color: '#64748b', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Was this analysis accurate?</p>
+      <div style={{ display: 'flex', gap: '0.4rem' }}>
+        {[
+          { type: 'correct', label: 'Yes, correct', color: '#10b981' },
+          { type: 'false_positive', label: 'False positive (should be safe)', color: '#eab308' },
+          { type: 'false_negative', label: 'False negative (should be phishing)', color: '#ef4444' },
+        ].map((btn) => (
+          <button key={btn.type} onClick={() => sendFeedback(btn.type)} disabled={!!submitted || sending} style={{
+            padding: '0.3rem 0.6rem', borderRadius: '6px', border: submitted === btn.type ? `1px solid ${btn.color}` : '1px solid #1e2a45',
+            background: submitted === btn.type ? btn.color + '22' : 'transparent', color: submitted === btn.type ? btn.color : '#8892b0',
+            fontSize: '0.72rem', fontWeight: 500, cursor: submitted ? 'default' : 'pointer',
+            opacity: submitted && submitted !== btn.type ? 0.4 : 1, transition: 'all 0.15s',
+          }}>
+            {submitted === btn.type ? '\u2713 ' : ''}{btn.label}
+          </button>
+        ))}
       </div>
     </div>
   )

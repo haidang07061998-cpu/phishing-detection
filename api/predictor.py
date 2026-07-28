@@ -2,6 +2,7 @@ import re
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import torch
 
@@ -166,8 +167,11 @@ class PhishingPredictor:
         brand_info = {"has_brand_impersonation": False, "brands_detected": [],
                       "max_confidence": 0.0, "risk_score": 0.0}
 
-        dns_whois = self._extract_dns_whois(url)
-        ssl_redirect = self._extract_ssl_redirect(url)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            dns_future = pool.submit(self._extract_dns_whois, url)
+            ssl_future = pool.submit(self._extract_ssl_redirect, url)
+            dns_whois = dns_future.result()
+            ssl_redirect = ssl_future.result()
         susp_tld = check_suspicious_tld(url)
         is_short = is_url_shortener(url)
         expanded_url = ssl_redirect.get("final_url", "") if ssl_redirect else ""
