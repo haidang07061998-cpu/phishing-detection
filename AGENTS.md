@@ -7,6 +7,8 @@ phishing-detection/
 │   ├── app.py              # Flask routes (health, predict, predict/batch, domain, ip)
 │   ├── predictor.py        # PhishingPredictor: loads checkpoint + runs inference + temperature scaling + reputation
 │   ├── engines.py          # Multi-engine analysis: AI Model, DNS Infra, URL Pattern, Brand
+│   ├── explainer.py        # Natural language explanation generator (template-based, no LLM API needed)
+│   ├── reputation.py       # Thread-safe reputation storage (JSON cache with threading.Lock)
 │   └── requirements.txt    # Python dependencies
 ├── data/
 │   ├── raw/                # Immutable source data
@@ -167,18 +169,34 @@ docker-compose up --build
 ## Historical Reputation
 `data/cache/reputation.json` stores per-domain scan history (first_seen, last_seen, scans, avg_score, phishing_rate). Updated on every prediction.
 
+## Natural Language Explainer (`api/explainer.py`)
+Template-based explanation generator (no LLM API required). Analyzes all signals:
+- Engine verdicts (AI, DNS, URL Pattern, Brand)
+- Brand impersonation detection
+- DNS/WHOIS/SSL signals (domain age, ASN, certificate)
+- URL features (entropy, keywords, TLD, redirects)
+- Subdomain structure vs registered domain
+- Historical reputation
+
+Returns `verdict_summary`, `key_findings[]`, `risk_factors[]`, `recommendations[]`.
+
 ## API Response Changes
 New fields in `/predict` response:
 - `engine_results`: { final_score, final_verdict, engines: { name: { score, verdict, details } } }
 - `aggregate_score`: (0-100) combined multi-engine score
 - `engine_count`: number of active engines (0-4)
 - `reputation`: historical scan data for the domain
+- `subdomain_info`: { full_hostname, registered_domain, subdomain, parts } — null if no subdomain
+- `explanation`: { verdict_summary, key_findings[], risk_factors[], recommendations[] }
 
 ## Frontend Changes
 - Gauge uses calibrated `aggregate_score` instead of raw sigmoid
 - `EngineResultRow` component shows each engine's score + verdict
 - `ReputationSection` shows historical scan data
 - OverviewTab displays engine breakdown under Advanced Analysis
+- OverviewTab has Analysis Summary card (natural language explanation at top)
+- DetailsTab shows Subdomain Note warning when subdomain != registered domain
+- BehaviorTab shows warning banner when html_provided=false
 - "AI Confidence" → "Risk Score" label with temperature scaling tooltip
 
 ## Class Imbalance

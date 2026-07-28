@@ -483,6 +483,43 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           )}
         </div>
       </div>
+
+      {result.explanation && (
+        <div style={{
+          marginBottom: '1.25rem', padding: '1rem', borderRadius: '8px',
+          background: !isWhitelisted && confidence >= 0.6 ? '#2a1515' : !isWhitelisted && confidence >= 0.3 ? '#2a2415' : '#0b0f19',
+          border: `1px solid ${barColor}44`,
+        }}>
+          <p style={{ margin: '0 0 0.5rem', color: barColor, fontSize: '0.85rem', fontWeight: 700 }}>
+            {badgeIcon} Analysis Summary
+          </p>
+          <p style={{ margin: '0 0 0.75rem', color: '#e2e8f0', fontSize: '0.85rem', lineHeight: '1.6' }}>
+            {result.explanation.verdict_summary}
+          </p>
+          {result.explanation.key_findings?.length > 0 && (
+            <div style={{ marginBottom: '0.5rem' }}>
+              <p style={{ margin: '0 0 0.35rem', color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key Findings</p>
+              {result.explanation.key_findings.map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem', marginBottom: '0.2rem' }}>
+                  <span style={{ color: barColor, fontSize: '0.75rem', flexShrink: 0 }}>{'\u2022'}</span>
+                  <span style={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: '1.4' }}>{f}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {result.explanation.recommendations?.length > 0 && (
+            <div style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', background: '#0f172a', marginTop: '0.25rem' }}>
+              <p style={{ margin: '0 0 0.25rem', color: '#64748b', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recommendations</p>
+              {result.explanation.recommendations.map((r, i) => (
+                <p key={i} style={{ margin: '0 0 0.15rem', color: '#94a3b8', fontSize: '0.78rem' }}>
+                  {i + 1}. {r}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{
         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem',
       }}>

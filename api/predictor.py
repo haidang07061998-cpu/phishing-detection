@@ -13,6 +13,7 @@ from src.features.dns_whois_extractor import extract_dns_whois_features
 from src.features.ssl_redirect_extractor import extract_ssl_redirect_features
 from src.brand_detection import get_brand_risk_score
 from api.reputation import get_domain_reputation, update_domain_reputation
+from api.explainer import generate_explanation
 
 PROJECT = Path(__file__).resolve().parents[1]
 MODEL_DIR = PROJECT / "data" / "models"
@@ -182,7 +183,7 @@ class PhishingPredictor:
                 redirect_whitelisted = True
                 tab_features = self._get_feature_summary(self._extract_tabular(url))
                 reg_domain = _get_registered_domain(expanded_url) or ""
-                return {
+                rd = {
                     "url": url,
                     "phishing_probability": 0.001,
                     "is_phishing": False,
@@ -203,6 +204,8 @@ class PhishingPredictor:
                     "reputation": get_domain_reputation(reg_domain),
                     "subdomain_info": subdomain_info,
                 }
+                rd["explanation"] = generate_explanation(rd)
+                return rd
             effective_url = expanded_url
 
         is_whitelisted = bool(
@@ -214,7 +217,7 @@ class PhishingPredictor:
             brand_info = get_brand_risk_score(url, "")
             tab_features = self._get_feature_summary(self._extract_tabular(url))
             reg_domain = _get_registered_domain(effective_url) or ""
-            return {
+            rd = {
                 "url": url,
                 "phishing_probability": 0.001,
                 "is_phishing": False,
@@ -234,6 +237,8 @@ class PhishingPredictor:
                 "reputation": get_domain_reputation(reg_domain),
                 "subdomain_info": subdomain_info,
             }
+            rd["explanation"] = generate_explanation(rd)
+            return rd
 
         self.model.eval()
         tab_vec = self._extract_tabular(effective_url)
@@ -309,7 +314,7 @@ class PhishingPredictor:
                                      combined["final_verdict"])
         reputation = get_domain_reputation(reg_domain) if reg_domain else {}
 
-        return {
+        result_dict = {
             "url": url,
             "effective_url": effective_url if effective_url != url else None,
             "phishing_probability": round(prob_val, 4),
@@ -332,6 +337,8 @@ class PhishingPredictor:
             "reputation": reputation if reputation else {},
             "subdomain_info": subdomain_info,
         }
+        result_dict["explanation"] = generate_explanation(result_dict)
+        return result_dict
 
     def _get_feature_summary(self, tab_vec: np.ndarray) -> dict:
         keys = FEATURE_KEYS
