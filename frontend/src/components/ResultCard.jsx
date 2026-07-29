@@ -1026,8 +1026,17 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
   const [activeQuestion, setActiveQuestion] = useState(null)
   const [llmAnswers, setLlmAnswers] = useState({})
   const [loading, setLoading] = useState({})
+  const [llmStatus, setLlmStatus] = useState(null)
   const exp = explanation || {}
   const verdict = confidence >= 0.6 ? 'phishing' : confidence >= 0.3 ? 'suspicious' : 'safe'
+
+  useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL || '/api'
+    fetch(apiUrl + '/health/llm')
+      .then(r => r.json())
+      .then(d => setLlmStatus(d.available ? 'ai' : 'template'))
+      .catch(() => setLlmStatus('template'))
+  }, [])
 
   const templateAnswers = [
     exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${verdict} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
@@ -1103,9 +1112,21 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
           animation: skeleton-pulse 1.5s ease-in-out infinite;
         }
       `}</style>
-      <p style={{ margin: '0 0 0.5rem', color: '#94a3b8', fontSize: '0.75rem', lineHeight: '1.5' }}>
-        Ask questions about this analysis. Click a question to expand the answer.
-      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem' }}>
+        <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.75rem', lineHeight: '1.5' }}>
+          Ask questions about this analysis. Click a question to expand the answer.
+        </p>
+        {llmStatus && (
+          <span style={{
+            fontSize: '0.6rem', fontWeight: 600, padding: '0.15rem 0.45rem', borderRadius: '4px',
+            background: llmStatus === 'ai' ? '#166534' : '#334155',
+            color: llmStatus === 'ai' ? '#86efac' : '#cbd5e1',
+            whiteSpace: 'nowrap',
+          }}>
+            {llmStatus === 'ai' ? 'AI Enhanced' : 'Template'}
+          </span>
+        )}
+      </div>
       {faqs.map((faq, i) => {
         const displayText = llmAnswers[i] || templateAnswers[i]
         const isLoading = loading[i]

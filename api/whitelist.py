@@ -1,6 +1,9 @@
 import json
+import logging
 import threading
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 DYNAMIC_PATH = Path(__file__).resolve().parents[1] / "data" / "dynamic_whitelist.json"
 _dynamic_lock = threading.Lock()
@@ -76,16 +79,18 @@ def maybe_add_dynamic(reputation: dict, domain: str) -> bool:
         if domain not in dynamic:
             dynamic.add(domain)
             save_dynamic(dynamic)
+            logger.info("Auto-whitelisted domain: %s (scans=%d, avg_score=%.1f)", domain, scans, avg_score)
             return True
     return False
 
 
 def get_all() -> dict:
+    dynamic = load_dynamic()
     return {
         "static_count": len(STATIC_DOMAINS),
         "static_domains": sorted(STATIC_DOMAINS),
-        "dynamic_count": len(load_dynamic()),
-        "dynamic_domains": sorted(load_dynamic()),
+        "dynamic_count": len(dynamic),
+        "dynamic_domains": sorted(dynamic),
     }
 
 

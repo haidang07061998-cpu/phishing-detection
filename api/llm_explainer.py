@@ -113,6 +113,10 @@ def _explain_ollama(context: str, question: str) -> str | None:
         return None
 
 
+def is_ollama_available() -> bool:
+    return _ollama_available()
+
+
 def explain(result: dict, question: str) -> str | None:
     if not _ollama_available():
         return None

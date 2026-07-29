@@ -1,6 +1,5 @@
 import re
 import ipaddress
-from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 import threading
 from flask import Flask, request, jsonify
@@ -53,6 +52,15 @@ def validate_ip(ip: str) -> str | None:
 def health():
     return jsonify({"status": "ok"})
 
+@app.route("/health/llm", methods=["GET"])
+def health_llm():
+    from api.llm_explainer import is_ollama_available
+    return jsonify({
+        "available": is_ollama_available(),
+        "provider": "ollama",
+        "model": "llama3.2:3b",
+    })
+
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -92,15 +100,13 @@ def predict_batch():
     if len(urls) > MAX_BATCH_SIZE:
         return jsonify({"error": f"Batch size cannot exceed {MAX_BATCH_SIZE}"}), 400
 
-    def _predict_single(url: str) -> dict:
+    results = []
+    for url in urls:
         try:
             with predictor_lock:
-                return predictor.predict(url.strip())
+                results.append(predictor.predict(url.strip()))
         except Exception as e:
-            return {"url": url, "error": str(e)}
-
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(_predict_single, urls))
+            results.append({"url": url, "error": str(e)})
 
     for r in results:
         if "error" not in r:
