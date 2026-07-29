@@ -65,8 +65,8 @@ function UrlInput({ onPredict, loading, activeTab }) {
   return (
     <form onSubmit={handleSubmit} style={{ width: '100%' }}>
       <div style={{
-        display: 'flex', gap: '0', background: '#131b2a',
-        borderRadius: '12px', border: '1px solid #1e2a45',
+        display: 'flex', gap: '0', background: 'var(--bg-card)',
+        borderRadius: '12px', border: '1px solid var(--border)',
         overflow: 'hidden', transition: 'border-color 0.15s',
       }}>
         <input
@@ -86,7 +86,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
           style={{
             padding: '0.85rem 1.5rem', border: 'none',
             background: loading ? '#1e2a45' : '#3b82f6',
-            color: loading ? '#64748b' : '#fff',
+            color: loading ? 'var(--text-muted)' : '#fff',
             fontSize: '0.9rem', fontWeight: 700,
             cursor: loading || !value.trim() ? 'not-allowed' : 'pointer',
             transition: 'background 0.15s',
@@ -118,8 +118,8 @@ function UrlInput({ onPredict, loading, activeTab }) {
       }}>
         {examples.map((ex, i) => (
           <button key={i} type="button" onClick={() => pickExample(ex)} style={{
-            background: '#131b2a', border: '1px solid #1e2a45',
-            color: '#8892b0', borderRadius: '999px',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            color: 'var(--text-secondary)', borderRadius: '999px',
             padding: '0.3rem 0.75rem', fontSize: '0.8rem',
             cursor: 'pointer', fontFamily: 'monospace',
             transition: 'all 0.15s',
@@ -133,7 +133,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
             onClick={() => setShowHtmlUpload(!showHtmlUpload)}
             style={{
               background: 'none', border: 'none',
-              color: showHtmlUpload ? '#3b82f6' : '#64748b',
+              color: showHtmlUpload ? '#3b82f6' : 'var(--text-muted)',
               fontSize: '0.8rem', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '0.3rem',
               padding: '0.3rem 0.5rem',
@@ -150,19 +150,19 @@ function UrlInput({ onPredict, loading, activeTab }) {
       {showHtmlUpload && activeTab === 'url' && (
         <div style={{
           marginTop: '0.75rem', padding: '0.75rem 1rem', borderRadius: '10px',
-          background: '#131b2a', border: '1px solid #1e2a45',
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', gap: '0.75rem',
         }}>
           <input type="file" accept=".html,.htm" onChange={handleFileChange} id="html-upload" style={{ display: 'none' }} />
           <label htmlFor="html-upload" style={{
             padding: '0.4rem 0.85rem', borderRadius: '6px',
-            background: '#1e2a45', color: '#c4d1ec', fontSize: '0.8rem',
+            background: 'var(--bg-tab)', color: 'var(--text-primary)', fontSize: '0.8rem',
             cursor: 'pointer', flexShrink: 0, border: '1px solid #2a3a52',
           }}>
             Choose File
           </label>
           <span style={{
-            color: fileName ? '#c4d1ec' : '#64748b', fontSize: '0.85rem',
+            color: fileName ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '0.85rem',
             flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {fileName || 'No file selected — upload an HTML page for deeper analysis'}

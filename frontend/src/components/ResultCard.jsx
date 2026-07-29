@@ -168,7 +168,7 @@ function formatDetailValue(key, value, extra) {
 }
 
 function getDetailColor(key, value, extra) {
-  if (value === -1 || value === '' || value === undefined) return '#64748b'
+  if (value === -1 || value === '' || value === undefined) return 'var(--text-muted)'
   if (key === 'ssl_valid') return value === 1 ? '#10b981' : '#ef4444'
   if (key === 'ssl_issuer_trusted') {
     const trusted = value === 1 || extra?.trustedCAOverride
@@ -179,23 +179,23 @@ function getDetailColor(key, value, extra) {
     if (value < 365) return '#eab308'
     return '#10b981'
   }
-  if (key === 'redirect_count') return value > 4 ? '#ef4444' : value > 2 ? '#eab308' : '#c4d1ec'
+  if (key === 'redirect_count') return value > 4 ? '#ef4444' : value > 2 ? '#eab308' : 'var(--text-primary)'
   if (key === 'cross_domain_redirect') {
     if (value !== 1) return '#10b981'
     const dest = extra?.finalUrl || ''
     const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d))
     return isKnown ? '#10b981' : '#ef4444'
   }
-  if (key === 'is_privacy_protected') return '#8892b0'
+  if (key === 'is_privacy_protected') return 'var(--text-secondary)'
   if (key === 'ttl') {
-    if (value < 300 && extra?.whitelisted) return '#c4d1ec'
+    if (value < 300 && extra?.whitelisted) return 'var(--text-primary)'
     if (value < 300) return '#eab308'
-    return '#c4d1ec'
+    return 'var(--text-primary)'
   }
-  if (key === 'asn_description') return '#c4d1ec'
-  if (key === 'asn' || key === 'asn_country') return '#c4d1ec'
-  if (key === 'final_url') return '#c4d1ec'
-  return '#c4d1ec'
+  if (key === 'asn_description') return 'var(--text-primary)'
+  if (key === 'asn' || key === 'asn_country') return 'var(--text-primary)'
+  if (key === 'final_url') return 'var(--text-primary)'
+  return 'var(--text-primary)'
 }
 
 function getDetailBadge(key, value, extra) {
@@ -205,7 +205,7 @@ function getDetailBadge(key, value, extra) {
     return { text: 'Established \u00B7 Safe', color: '#10b981', bg: '#142a15' }
   }
   if (key === 'ttl' && value >= 0) {
-    if (value < 300 && extra?.whitelisted) return { text: 'Low TTL (CDN/Load Balancing)', color: '#c4d1ec', bg: '#0b0f19' }
+    if (value < 300 && extra?.whitelisted) return { text: 'Low TTL (CDN/Load Balancing)', color: 'var(--text-primary)', bg: 'var(--bg-page)' }
     if (value < 300) return { text: 'Low TTL \u00B7 Suspicious', color: '#eab308', bg: '#2a2415' }
   }
   if (key === 'cross_domain_redirect') {
@@ -280,7 +280,7 @@ function ProgressBar({ value, color, height = '20px', showLabel = true }) {
   const pct = Math.min(Math.max(value * 100, 0), 100).toFixed(1)
   return (
     <div style={{
-      width: '100%', height, background: '#1a2332', borderRadius: '10px',
+      width: '100%', height, background: 'var(--bg-tab)', borderRadius: '10px',
       overflow: 'hidden', position: 'relative',
     }}>
       <div style={{
@@ -304,7 +304,7 @@ function Badge({ children, color, bg }) {
   return (
     <span style={{
       padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem',
-      fontWeight: 600, background: bg || '#1a2332', color: color || '#8892b0',
+      fontWeight: 600, background: bg || 'var(--bg-tab)', color: color || 'var(--text-secondary)',
     }}>
       {children}
     </span>
@@ -330,8 +330,8 @@ function FeatureImportanceChart({ importance }) {
           const isPositive = val > 0
           return (
             <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ color: '#8892b0', fontSize: '0.72rem', minWidth: '100px', textAlign: 'right', flexShrink: 0 }}>{label}</span>
-              <div style={{ flex: 1, height: '16px', background: '#0b0f19', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', minWidth: '100px', textAlign: 'right', flexShrink: 0 }}>{label}</span>
+              <div style={{ flex: 1, height: '16px', background: 'var(--bg-page)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
                 <div style={{
                   width: `${pct}%`, height: '100%',
                   background: isPositive ? '#ef4444' : '#10b981',
@@ -355,7 +355,7 @@ function TooltipIcon({ text }) {
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: '14px', height: '14px', borderRadius: '50%',
-      background: '#1e2a45', color: '#64748b', fontSize: '10px',
+      background: 'var(--bg-tab)', color: 'var(--text-muted)', fontSize: '10px',
       cursor: 'help', marginLeft: '4px', flexShrink: 0, lineHeight: '14px',
     }} title={text}>?</span>
   )
@@ -366,7 +366,7 @@ function TabButton({ active, onClick, children }) {
     <button onClick={onClick} style={{
       padding: '0.4rem 1rem', borderRadius: '6px', border: 'none',
       background: active ? '#3b82f6' : 'transparent',
-      color: active ? '#fff' : '#8892b0', fontSize: '0.8rem',
+      color: active ? '#fff' : 'var(--text-secondary)', fontSize: '0.8rem',
       fontWeight: active ? 600 : 400, cursor: 'pointer',
       transition: 'all 0.15s',
     }}>
@@ -379,7 +379,7 @@ function formatFeatureBadge(name, value, whitelisted, brandInfo) {
   const formatted = formatFeatureValue(name, value)
   if (name === 'entropy') {
     const label = value > 4.5 ? 'High \u00B7 Suspicious' : value > 3.5 ? 'Medium \u00B7 Neutral' : 'Low \u00B7 Safe'
-    const color = whitelisted ? '#8892b0' : (value > 4.5 ? '#ef4444' : value > 3.5 ? '#eab308' : '#10b981')
+    const color = whitelisted ? 'var(--text-secondary)' : (value > 4.5 ? '#ef4444' : value > 3.5 ? '#eab308' : '#10b981')
     return { text: `${formatted} \u00B7 ${label}`, color }
   }
   if (name === 'domain_length') {
@@ -415,13 +415,13 @@ function EngineResultRow({ name, result }) {
   return (
     <div style={{ marginBottom: '0.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
-        <span style={{ color: '#8892b0', fontSize: '0.75rem', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 600 }}>{label}</span>
         <span style={{ color, fontSize: '0.8rem', fontWeight: 700 }}>{score}/100</span>
       </div>
-      <div style={{ width: '100%', height: '6px', background: '#1a2332', borderRadius: '4px', overflow: 'hidden' }}>
+      <div style={{ width: '100%', height: '6px', background: 'var(--bg-tab)', borderRadius: '4px', overflow: 'hidden' }}>
         <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: '4px', transition: 'width 0.6s ease' }} />
       </div>
-      <span style={{ color: '#64748b', fontSize: '0.65rem' }}>{details}</span>
+      <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{details}</span>
     </div>
   )
 }
@@ -433,15 +433,15 @@ function ReputationSection({ reputation }) {
   const phishingRate = reputation.phishing_rate || 0
   const lastSeen = reputation.last_seen ? new Date(reputation.last_seen).toLocaleString() : 'N/A'
   return (
-    <div style={{ padding: '0.75rem', borderRadius: '8px', background: '#0b0f19', border: '1px solid #1e2a45', marginTop: '0.75rem' }}>
+    <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)', marginTop: '0.75rem' }}>
       <p style={{ margin: '0 0 0.35rem', color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
         Historical Reputation
       </p>
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.78rem' }}>
-        <div><span style={{ color: '#64748b' }}>Scans: </span><span style={{ color: '#fff', fontWeight: 600 }}>{scanCount}</span></div>
-        <div><span style={{ color: '#64748b' }}>Avg Score: </span><span style={{ color: avgScore >= 60 ? '#ef4444' : avgScore >= 30 ? '#eab308' : '#10b981', fontWeight: 600 }}>{avgScore.toFixed(1)}</span></div>
-        <div><span style={{ color: '#64748b' }}>Phishing Rate: </span><span style={{ color: phishingRate > 0.5 ? '#ef4444' : '#10b981', fontWeight: 600 }}>{(phishingRate * 100).toFixed(1)}%</span></div>
-        <div><span style={{ color: '#64748b' }}>Last: </span><span style={{ color: '#8892b0', fontWeight: 600 }}>{lastSeen}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>Scans: </span><span style={{ color: '#fff', fontWeight: 600 }}>{scanCount}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>Avg Score: </span><span style={{ color: avgScore >= 60 ? '#ef4444' : avgScore >= 30 ? '#eab308' : '#10b981', fontWeight: 600 }}>{avgScore.toFixed(1)}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>Phishing Rate: </span><span style={{ color: phishingRate > 0.5 ? '#ef4444' : '#10b981', fontWeight: 600 }}>{(phishingRate * 100).toFixed(1)}%</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>Last: </span><span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{lastSeen}</span></div>
       </div>
     </div>
   )
@@ -462,7 +462,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
 
   return (
     <>
-      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ flexShrink: 0 }}>
           <Gauge value={confidence} whitelisted={isWhitelisted} />
         </div>
@@ -487,7 +487,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
       {result.explanation && (
         <div style={{
           marginBottom: '1.25rem', padding: '1rem', borderRadius: '8px',
-          background: !isWhitelisted && confidence >= 0.6 ? '#2a1515' : !isWhitelisted && confidence >= 0.3 ? '#2a2415' : '#0b0f19',
+          background: !isWhitelisted && confidence >= 0.6 ? '#2a1515' : !isWhitelisted && confidence >= 0.3 ? '#2a2415' : 'var(--bg-page)',
           border: `1px solid ${barColor}44`,
         }}>
           <p style={{ margin: '0 0 0.5rem', color: barColor, fontSize: '0.85rem', fontWeight: 700 }}>
@@ -509,7 +509,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           )}
           {result.explanation.recommendations?.length > 0 && (
             <div style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', background: '#0f172a', marginTop: '0.25rem' }}>
-              <p style={{ margin: '0 0 0.25rem', color: '#64748b', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recommendations</p>
+              <p style={{ margin: '0 0 0.25rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recommendations</p>
               {result.explanation.recommendations.map((r, i) => (
                 <p key={i} style={{ margin: '0 0 0.15rem', color: '#94a3b8', fontSize: '0.78rem' }}>
                   {i + 1}. {r}
@@ -521,10 +521,10 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
       )}
 
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem',
       }}>
         <div>
-          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid #1e2a45', paddingBottom: '0.35rem' }}>
+          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
             Morphology &amp; Characters
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -539,9 +539,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                 <div key={f.name} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '0.3rem 0.5rem', borderRadius: '6px',
-                  background: isRisk ? '#2a1515' : '#0b0f19',
+                  background: isRisk ? '#2a1515' : 'var(--bg-page)',
                 }}>
-                  <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                     {label}
                     {tooltip && <TooltipIcon text={tooltip} />}
                   </span>
@@ -555,7 +555,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
 
         <div>
-          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid #1e2a45', paddingBottom: '0.35rem' }}>
+          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
             Behavioral &amp; Infrastructure
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -570,9 +570,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                 <div key={f.name} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '0.3rem 0.5rem', borderRadius: '6px',
-                  background: isRisk ? '#2a1515' : '#0b0f19',
+                  background: isRisk ? '#2a1515' : 'var(--bg-page)',
                 }}>
-                  <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                     {label}
                     {tooltip && <TooltipIcon text={tooltip} />}
                   </span>
@@ -585,9 +585,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '0.3rem 0.5rem', borderRadius: '6px',
-              background: suspTld && !isWhitelisted ? '#2a1515' : '#0b0f19',
+              background: suspTld && !isWhitelisted ? '#2a1515' : 'var(--bg-page)',
             }}>
-              <span style={{ color: '#8892b0', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                 Suspicious TLD
                 <TooltipIcon text="Certain TLD extensions (.xyz, .top, .loan ...) are disproportionately used by phishing campaigns due to low registration cost." />
               </span>
@@ -599,9 +599,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
         <div>
-          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
             Advanced Analysis
           </p>
           {brand?.has_brand_impersonation ? (
@@ -621,7 +621,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                 </p>
               ))}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ color: '#8892b0', fontSize: '0.75rem' }}>Risk</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Risk</span>
                 <div style={{ flex: 1 }}>
                   <ProgressBar value={brand.risk_score} color={brand.risk_score > 0.7 ? '#ef4444' : '#eab308'} height="14px" showLabel={false} />
                 </div>
@@ -630,7 +630,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                 </span>
               </div>
               {brand.techniques?.length > 0 && (
-                <p style={{ margin: '0.35rem 0 0', color: '#64748b', fontSize: '0.7rem' }}>
+                <p style={{ margin: '0.35rem 0 0', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
                   Technique: {brand.techniques.join(', ')}
                 </p>
               )}
@@ -638,7 +638,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           ) : (
             <div style={{
               padding: '0.75rem', borderRadius: '8px',
-              background: '#0b0f19', border: '1px solid #1e2a45', marginBottom: '0.75rem',
+              background: 'var(--bg-page)', border: '1px solid var(--border)', marginBottom: '0.75rem',
             }}>
               <p style={{ margin: 0, color: '#10b981', fontSize: '0.8rem' }}>
                 {'\u2713'} No brand impersonation detected
@@ -648,9 +648,9 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           {result.engine_results?.engines && Object.keys(result.engine_results.engines).length > 0 && (
             <div style={{
               padding: '0.75rem', borderRadius: '8px',
-              background: '#0b0f19', border: '1px solid #1e2a45', marginBottom: '0.75rem',
+              background: 'var(--bg-page)', border: '1px solid var(--border)', marginBottom: '0.75rem',
             }}>
-              <p style={{ margin: '0 0 0.5rem', color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <p style={{ margin: '0 0 0.5rem', color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Engine Results ({result.engine_count || Object.keys(result.engine_results.engines).length})
               </p>
               {Object.entries(result.engine_results.engines).map(([name, data]) => (
@@ -662,18 +662,18 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
 
         <div>
-          <p style={{ color: '#8892b0', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
             Analysis Details
           </p>
           <div style={{
             padding: '0.75rem', borderRadius: '8px',
-            background: '#0b0f19', border: '1px solid #1e2a45',
+            background: 'var(--bg-page)', border: '1px solid var(--border)',
           }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
               <tbody>
                 {[
                   { label: 'Risk Score', value: `${pct}%`, color: barColor, tooltip: 'Calibrated multi-engine score (Temperature Scaling T=2.8 + weighted voting). Replaces raw sigmoid output for decision-making.' },
-                  { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : '#64748b' },
+                  { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : 'var(--text-muted)' },
                   { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
                   { label: 'Redirect', value: (() => {
                     const cr = result.ssl_redirect?.cross_domain_redirect
@@ -689,17 +689,17 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                     return known ? '#10b981' : '#ef4444'
                   })() },
                   { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#10b981' },
-                  { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : '#64748b' },
-                  { label: 'Features Extracted', value: `${features.length} signals`, color: '#c4d1ec' },
-                  { label: 'Model', value: 'Multi-Engine (4)', color: '#c4d1ec' },
-                  { label: 'Scan Time', value: scanTime, color: '#64748b' },
+                  { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : 'var(--text-muted)' },
+                  { label: 'Features Extracted', value: `${features.length} signals`, color: 'var(--text-primary)' },
+                  { label: 'Model', value: 'Multi-Engine (4)', color: 'var(--text-primary)' },
+                  { label: 'Scan Time', value: scanTime, color: 'var(--text-muted)' },
                 ].map((row, i) => (
                   <tr key={i}>
-                    <td style={{ padding: '0.25rem 0.5rem 0.25rem 0', color: '#64748b', borderBottom: i < 7 ? '1px solid #1e2a45' : 'none' }}>
+                    <td style={{ padding: '0.25rem 0.5rem 0.25rem 0', color: 'var(--text-muted)', borderBottom: i < 7 ? '1px solid var(--border)' : 'none' }}>
                       {row.label}
                       {row.tooltip && <TooltipIcon text={row.tooltip} />}
                     </td>
-                    <td style={{ padding: '0.25rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 7 ? '1px solid #1e2a45' : 'none', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.25rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 7 ? '1px solid var(--border)' : 'none', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.value}
                     </td>
                   </tr>
@@ -721,7 +721,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
 
   if (!dns && !ssl) {
     return (
-      <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.9rem' }}>
+      <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
         No network data available — DNS/WHOIS/SSL extraction requires network access.
       </div>
     )
@@ -735,9 +735,9 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
     return (
       <div key={key} style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '0.35rem 0.5rem', borderRadius: '6px', background: '#0b0f19', gap: '0.5rem',
+        padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'var(--bg-page)', gap: '0.5rem',
       }}>
-        <span style={{ color: '#8892b0', fontSize: '0.78rem', flexShrink: 0 }}>{label}</span>
+        <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', flexShrink: 0 }}>{label}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', textAlign: 'right', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {badge ? (
             <span style={{
@@ -756,7 +756,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
       <div>
         <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
           DNS & WHOIS
@@ -793,11 +793,11 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
 function BehaviorTab({ domSignals, features, htmlProvided }) {
   if (!htmlProvided) {
     return (
-      <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', borderRadius: '8px', background: '#0b0f19', border: '1px solid #1e2a45' }}>
+      <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
         <p style={{ margin: '0 0 0.5rem', color: '#eab308', fontSize: '1rem', fontWeight: 700 }}>
           {'\u26A0'} HTML Content Not Provided
         </p>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem', lineHeight: '1.5' }}>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
           No HTML content was submitted — DOM analysis is unavailable. Upload an HTML file to enable behavioral analysis including script detection, form tracking, and JavaScript signal extraction.
         </p>
       </div>
@@ -810,7 +810,7 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
       <div>
         <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
           DOM Structure
@@ -826,9 +826,9 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
               <div key={key} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '0.35rem 0.5rem', borderRadius: '6px',
-                background: isRisk ? '#2a1515' : '#0b0f19',
+                background: isRisk ? '#2a1515' : 'var(--bg-page)',
               }}>
-                <span style={{ color: '#8892b0', fontSize: '0.78rem' }}>{label}</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{label}</span>
                 <Badge color={isRisk ? '#ef4444' : '#10b981'} bg={isRisk ? '#2a1515' : '#142a15'}>
                   {formatted}
                 </Badge>
@@ -852,9 +852,9 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
               <div key={key} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '0.35rem 0.5rem', borderRadius: '6px',
-                background: isRisk ? '#2a1515' : '#0b0f19',
+                background: isRisk ? '#2a1515' : 'var(--bg-page)',
               }}>
-                <span style={{ color: '#8892b0', fontSize: '0.78rem' }}>{label}</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{label}</span>
                 <Badge color={isRisk ? '#ef4444' : '#10b981'} bg={isRisk ? '#2a1515' : '#142a15'}>
                   {formatted}
                 </Badge>
@@ -872,16 +872,16 @@ function DomainResult({ result }) {
   return (
     <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px #3b82f644' }}>
       <div style={{ height: '5px', background: 'linear-gradient(90deg, #3b82f6, #3b82f688)' }} />
-      <div style={{ background: '#131b2a', padding: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card)', padding: '1.5rem' }}>
         <div style={{ marginBottom: '1rem' }}>
-          <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Domain Lookup
           </p>
           <p style={{ margin: 0, color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}>
             {result.domain}
           </p>
         </div>
-        <p style={{ color: '#8892b0', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
           DNS &amp; WHOIS records — no AI analysis (domain-only lookup)
         </p>
         <DetailsTab dns={dns} ssl={result.ssl_redirect} />
@@ -896,16 +896,16 @@ function IpResult({ result }) {
   return (
     <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px #3b82f644' }}>
       <div style={{ height: '5px', background: 'linear-gradient(90deg, #3b82f6, #3b82f688)' }} />
-      <div style={{ background: '#131b2a', padding: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card)', padding: '1.5rem' }}>
         <div style={{ marginBottom: '1rem' }}>
-          <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             IP Lookup
           </p>
           <p style={{ margin: 0, color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}>
             {result.ip}
           </p>
         </div>
-        <p style={{ color: '#8892b0', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
           Reverse DNS &amp; WHOIS — no AI analysis (IP-only lookup)
         </p>
         <DetailsTab dns={dns} ssl={ssl} />
@@ -954,10 +954,10 @@ function ResultCard({ result }) {
     }}>
       <div style={{ height: '5px', background: `linear-gradient(90deg, ${barColor}, ${barColor}88)` }} />
 
-      <div style={{ background: '#131b2a', padding: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card)', padding: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ color: '#64748b', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Analyzed URL
             </p>
             <p style={{ margin: 0, color: '#fff', wordBreak: 'break-all', fontSize: '0.9rem', fontFamily: 'monospace' }}>
@@ -985,7 +985,7 @@ function ResultCard({ result }) {
         )}
 
         <div style={{
-          display: 'flex', gap: '0.25rem', background: '#1a2332',
+          display: 'flex', gap: '0.25rem', background: 'var(--bg-tab)',
           borderRadius: '8px', padding: '2px', marginBottom: '1rem',
         }}>
           <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
@@ -1133,26 +1133,26 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
         return (
           <div key={i} style={{
             borderRadius: '8px', overflow: 'hidden',
-            border: `1px solid ${activeQuestion === i ? barColor + '44' : '#1e2a45'}`,
+            border: `1px solid ${activeQuestion === i ? barColor + '44' : 'var(--border)'}`,
             transition: 'border 0.15s',
           }}>
             <button onClick={() => handleClick(i)} style={{
-              width: '100%', padding: '0.6rem 0.75rem', border: 'none', background: '#0b0f19',
+              width: '100%', padding: '0.6rem 0.75rem', border: 'none', background: 'var(--bg-page)',
               color: '#e2e8f0', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
               textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>{faq.q}</span>
-              <span style={{ color: '#64748b', fontSize: '0.7rem', transform: activeQuestion === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', transform: activeQuestion === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
                 {'\u25BC'}
               </span>
             </button>
             {activeQuestion === i && (
-              <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid #1e2a45' }}>
+              <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid var(--border)' }}>
                 {isLoading ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', padding: '0.1rem 0' }}>
-                    <div className="skeleton-line" style={{ width: '85%', height: '0.7rem', borderRadius: '4px', background: '#1e2a45' }} />
-                    <div className="skeleton-line" style={{ width: '60%', height: '0.7rem', borderRadius: '4px', background: '#1e2a45' }} />
-                    <div className="skeleton-line" style={{ width: '45%', height: '0.7rem', borderRadius: '4px', background: '#1e2a45' }} />
+                    <div className="skeleton-line" style={{ width: '85%', height: '0.7rem', borderRadius: '4px', background: 'var(--bg-tab)' }} />
+                    <div className="skeleton-line" style={{ width: '60%', height: '0.7rem', borderRadius: '4px', background: 'var(--bg-tab)' }} />
+                    <div className="skeleton-line" style={{ width: '45%', height: '0.7rem', borderRadius: '4px', background: 'var(--bg-tab)' }} />
                   </div>
                 ) : (
                   <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
@@ -1160,7 +1160,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
                   </p>
                 )}
                 {llmAnswers[i] && (
-                  <p style={{ margin: '0.35rem 0 0', color: '#64748b', fontSize: '0.65rem', textAlign: 'right' }}>
+                  <p style={{ margin: '0.35rem 0 0', color: 'var(--text-muted)', fontSize: '0.65rem', textAlign: 'right' }}>
                     Llama 3.2
                   </p>
                 )}
@@ -1203,8 +1203,8 @@ function FeedbackButton({ result }) {
   if (result.whitelisted) return null
 
   return (
-    <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', borderRadius: '8px', background: '#0b0f19', border: '1px solid #1e2a45' }}>
-      <p style={{ margin: '0 0 0.35rem', color: '#64748b', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Was this analysis accurate?</p>
+    <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
+      <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Was this analysis accurate?</p>
       <div style={{ display: 'flex', gap: '0.4rem' }}>
         {[
           { type: 'correct', label: 'Yes, correct', color: '#10b981' },
@@ -1213,7 +1213,7 @@ function FeedbackButton({ result }) {
         ].map((btn) => (
           <button key={btn.type} onClick={() => sendFeedback(btn.type)} disabled={!!submitted || sending} style={{
             padding: '0.3rem 0.6rem', borderRadius: '6px', border: submitted === btn.type ? `1px solid ${btn.color}` : '1px solid #1e2a45',
-            background: submitted === btn.type ? btn.color + '22' : 'transparent', color: submitted === btn.type ? btn.color : '#8892b0',
+            background: submitted === btn.type ? btn.color + '22' : 'transparent', color: submitted === btn.type ? btn.color : 'var(--text-secondary)',
             fontSize: '0.72rem', fontWeight: 500, cursor: submitted ? 'default' : 'pointer',
             opacity: submitted && submitted !== btn.type ? 0.4 : 1, transition: 'all 0.15s',
           }}>
