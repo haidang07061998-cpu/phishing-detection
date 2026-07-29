@@ -130,14 +130,16 @@ function App() {
         <div style={{
           maxWidth: '1200px',
           margin: '0 auto',
-          padding: '0 1.5rem',
-          height: '56px',
+          padding: '0.75rem 1.5rem',
+          minHeight: '56px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="hdr-left" style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
               <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
                 <rect width="28" height="28" rx="6" fill="#3b82f6" />
                 <path d="M14 6v16M6 14h16" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
@@ -146,7 +148,7 @@ function App() {
                 PhishDetect
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-tab)', borderRadius: '8px', padding: '2px' }}>
+            <div className="hdr-tabs" style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-tab)', borderRadius: '8px', padding: '2px' }}>
               {['url', 'domain', 'ip address'].map(tab => (
                 <button
                   key={tab}
@@ -162,6 +164,7 @@ function App() {
                     cursor: 'pointer',
                     textTransform: 'capitalize',
                     transition: 'all 0.15s',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {tab}
@@ -344,12 +347,11 @@ function App() {
         .skeleton-pulse { animation: skeleton-shimmer 1.5s ease-in-out infinite; }
         input:focus { box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
         @media (max-width: 768px) {
-          .app-header-inner { flex-wrap: wrap; gap: 0.5rem !important; }
-          .app-tabs { order: 3; width: 100%; overflow-x: auto; }
+          .hdr-tabs { width: 100%; overflow-x: auto; }
+          .hdr-left { flex-wrap: wrap; gap: 0.5rem !important; width: 100%; }
         }
         @media (max-width: 640px) {
-          .app-main { padding: 1.5rem 0.75rem 1rem !important; }
-          .app-header-inner { padding: 0 0.75rem !important; }
+          main > div { padding: 1.5rem 0.75rem 1rem !important; }
         }
       `}</style>
     </div>
