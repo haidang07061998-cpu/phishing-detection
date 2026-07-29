@@ -32,6 +32,7 @@ from bs4 import BeautifulSoup, Comment
 
 
 SUSPICIOUS_JS_PATTERNS = [
+    r"\batob\s*\(",
     r"\bonmouseover\s*=",
     r"\bonclick\s*=",
     r"\bwindow\.location\b",
@@ -92,6 +93,7 @@ def extract_dom_features(html: str, base_url: str = "") -> np.ndarray:
     button_count = len(soup.find_all("button"))
     all_links = soup.find_all("a", href=True)
     total_links = len(all_links)
+    all_forms = soup.find_all("form", action=True)
 
     # ── External references (6) ──
     external_script_count = sum(
@@ -99,7 +101,10 @@ def extract_dom_features(html: str, base_url: str = "") -> np.ndarray:
         if s.get("src") and _is_external(s["src"])
     )
     external_links = sum(1 for a in all_links if _is_external(a["href"]))
-    external_link_ratio = round(external_links / max(total_links, 1), 4)
+    external_forms = sum(1 for f in all_forms if _is_external(f["action"]))
+    external_refs = external_links + external_forms
+    external_ref_total = total_links + len(all_forms)
+    external_link_ratio = round(external_refs / max(external_ref_total, 1), 4)
 
     all_imgs = soup.find_all("img", src=True)
     total_imgs = len(all_imgs)
@@ -129,7 +134,7 @@ def extract_dom_features(html: str, base_url: str = "") -> np.ndarray:
             meta_refresh = 1
             break
 
-    inline_js = " ".join(s.string for s in all_scripts if s.string)
+    inline_js = " ".join(s.get_text() for s in all_scripts if s.get_text())
     eval_count = len(re.findall(r"\beval\s*\(", inline_js))
     document_write_count = len(re.findall(r"\bdocument\.write\s*\(", inline_js))
 
