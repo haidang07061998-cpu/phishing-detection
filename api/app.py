@@ -1,7 +1,6 @@
 import re
 import ipaddress
 from urllib.parse import urlparse
-import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -14,7 +13,6 @@ from api.llm_explainer import explain as llm_explain
 app = Flask(__name__)
 CORS(app)
 
-predictor_lock = threading.Lock()
 MAX_BATCH_SIZE = 50
 
 
@@ -76,8 +74,7 @@ def predict():
     html_content = data.get("html", None)
 
     try:
-        with predictor_lock:
-            result = predictor.predict(url, html_content)
+        result = predictor.predict(url, html_content)
         dispatch("scan.completed", {
             "url": url,
             "aggregate_score": result.get("aggregate_score"),
@@ -103,8 +100,7 @@ def predict_batch():
     results = []
     for url in urls:
         try:
-            with predictor_lock:
-                results.append(predictor.predict(url.strip()))
+            results.append(predictor.predict(url.strip()))
         except Exception as e:
             results.append({"url": url, "error": str(e)})
 

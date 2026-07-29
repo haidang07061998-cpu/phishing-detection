@@ -1,5 +1,6 @@
 import re
 import sys
+import threading
 from pathlib import Path
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
@@ -71,6 +72,7 @@ class PhishingPredictor:
             self.model.load_state_dict(ckpt)
         self.model.eval()
         self.tokenizer = self.model.bert.tokenizer
+        self._inference_lock = threading.Lock()
         self._maybe_quantize()
 
     def _maybe_quantize(self) -> None:
@@ -189,30 +191,39 @@ class PhishingPredictor:
             rd["explanation"] = generate_explanation(rd)
             return rd
 
-        self.model.eval()
         tab_vec = self._extract_tabular(effective_url)
         dom_vec, clean_text = self._extract_html(html_content, effective_url) if html_content else (
             np.zeros(64, dtype=np.float32), "[content not provided]"
         )
 
-        tab_tensor = torch.from_numpy(tab_vec).unsqueeze(0).to(DEVICE)
-        dom_tensor = torch.from_numpy(dom_vec).unsqueeze(0).to(DEVICE)
-        tokens = self.tokenizer(
-            [clean_text], padding=True, truncation=True,
-            max_length=512, return_tensors="pt",
-        )
+        with self._inference_lock:
+            self.model.eval()
+            tab_tensor = torch.from_numpy(tab_vec).unsqueeze(0).to(DEVICE)
+            dom_tensor = torch.from_numpy(dom_vec).unsqueeze(0).to(DEVICE)
+            tokens = self.tokenizer(
+                [clean_text], padding=True, truncation=True,
+                max_length=512, return_tensors="pt",
+            )
 
-        tab_tensor.requires_grad_(True)
-        logits = self.model(
-            tab_tensor,
-            tokens["input_ids"].to(DEVICE),
-            tokens["attention_mask"].to(DEVICE),
-            dom_tensor,
-        )
-        # Temperature scaling before sigmoid
-        logits = logits / self.temperature
-        prob = torch.sigmoid(logits)
-        prob_val = prob.item()
+            tab_tensor.requires_grad_(True)
+            logits = self.model(
+                tab_tensor,
+                tokens["input_ids"].to(DEVICE),
+                tokens["attention_mask"].to(DEVICE),
+                dom_tensor,
+            )
+            logits = logits / self.temperature
+            prob = torch.sigmoid(logits)
+            prob_val = prob.item()
+
+            self.model.zero_grad()
+            prob.backward()
+            grads = tab_tensor.grad[0].cpu().numpy() if tab_tensor.grad is not None else np.zeros(TABULAR_DIM)
+            feature_importance = {
+                FEATURE_KEYS[i]: round(float(grads[i] * tab_vec[i]), 4)
+                for i in range(TABULAR_DIM)
+            }
+            tab_tensor.requires_grad_(False)
 
         # Infrastructure sanity check: strong DNS+SSL contradicts phishing
         if prob_val > 0.5 and dns_whois and ssl_redirect and not susp_tld and not is_short:
@@ -228,15 +239,6 @@ class PhishingPredictor:
                 if domain and a_count >= 1 and ssl_ok and \
                    any(domain.endswith(t) for t in SAFE_COUNTRY_TLDS):
                     prob_val = min(prob_val, 0.15)
-
-        self.model.zero_grad()
-        prob.backward()
-        grads = tab_tensor.grad[0].cpu().numpy() if tab_tensor.grad is not None else np.zeros(TABULAR_DIM)
-        feature_importance = {
-            FEATURE_KEYS[i]: round(float(grads[i] * tab_vec[i]), 4)
-            for i in range(TABULAR_DIM)
-        }
-        tab_tensor.requires_grad_(False)
 
         brand_info = get_brand_risk_score(effective_url, clean_text)
         dom_signals = self._extract_dom_signals(dom_vec)
