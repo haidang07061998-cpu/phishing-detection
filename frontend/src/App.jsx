@@ -142,7 +142,7 @@ function App() {
                 <rect width="28" height="28" rx="6" fill="#3b82f6" />
                 <path d="M14 6v16M6 14h16" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
-              <span style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700, letterSpacing: '-0.3px' }}>
+              <span style={{ color: 'var(--text-bright)', fontSize: '1.1rem', fontWeight: 700, letterSpacing: '-0.3px' }}>
                 PhishDetect
               </span>
             </div>
@@ -300,7 +300,7 @@ function App() {
             border: '1px solid var(--border)',
           }}>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>AI Model</p>
-            <p style={{ margin: '0.35rem 0 0', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}>
+            <p style={{ margin: '0.35rem 0 0', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
               Gated Fusion
             </p>
             <p style={{ margin: '0.15rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>

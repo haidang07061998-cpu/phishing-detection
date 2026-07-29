@@ -320,7 +320,7 @@ function FeatureImportanceChart({ importance }) {
   const maxAbs = Math.max(...entries.map(e => e.abs), 0.001)
   return (
     <div style={{ marginTop: '1rem' }}>
-      <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+      <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
         Feature Impact on Prediction
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -612,7 +612,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               <p style={{ margin: 0, color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}>
                 {'\u26A0'} Brand Impersonation
               </p>
-              <p style={{ margin: '0.35rem 0', color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>
+              <p style={{ margin: '0.35rem 0', color: 'var(--text-bright)', fontSize: '0.9rem', fontWeight: 600 }}>
                 {brand.brands_detected?.join(', ')}
               </p>
               {brand.contexts?.slice(0, 1).map((ctx, i) => (
@@ -758,7 +758,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
       <div>
-        <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+        <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
           DNS & WHOIS
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -779,7 +779,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
         </div>
       </div>
       <div>
-        <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+        <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
           SSL & Redirect
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -812,7 +812,7 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
       <div>
-        <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+        <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
           DOM Structure
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -838,7 +838,7 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
         </div>
       </div>
       <div>
-        <p style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
+        <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
           JavaScript Signals
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -877,7 +877,7 @@ function DomainResult({ result }) {
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Domain Lookup
           </p>
-          <p style={{ margin: 0, color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}>
+          <p style={{ margin: 0, color: 'var(--text-bright)', fontSize: '0.9rem', fontFamily: 'monospace' }}>
             {result.domain}
           </p>
         </div>
@@ -901,7 +901,7 @@ function IpResult({ result }) {
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             IP Lookup
           </p>
-          <p style={{ margin: 0, color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}>
+          <p style={{ margin: 0, color: 'var(--text-bright)', fontSize: '0.9rem', fontFamily: 'monospace' }}>
             {result.ip}
           </p>
         </div>

@@ -76,7 +76,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
           placeholder={PLACEHOLDERS[activeTab] || 'Enter a URL'}
           style={{
             flex: 1, padding: '0.85rem 1rem', border: 'none',
-            background: 'transparent', color: '#fff',
+            background: 'transparent', color: 'var(--text-bright)',
             fontSize: '0.95rem', outline: 'none',
           }}
         />
