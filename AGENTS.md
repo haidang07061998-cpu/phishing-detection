@@ -33,12 +33,13 @@ phishing-detection/
 │       ├── evaluation_proposed.json
 │       └── evaluation_results.json
 ├── frontend/               # ReactJS + Vite
-│   ├── index.html
+│   ├── index.html          # CSS vars cho dark/light theme
 │   ├── package.json
-│   ├── vite.config.js
+│   ├── vite.config.js      # host: 0.0.0.0 cho mobile
 │   └── src/
 │       ├── main.jsx
-│       ├── App.jsx
+│       ├── App.jsx         # Theme toggle, skeleton loading, tabs
+│       ├── ThemeContext.jsx # Dark/light mode context + localStorage
 │       └── components/
 │           ├── UrlInput.jsx
 │           └── ResultCard.jsx
@@ -207,3 +208,33 @@ All training scripts now use `pos_weight` in `BCEWithLogitsLoss`
 
 ## CV note
 3-fold (Proposed) vs 5-fold (Baselines) explained in code docstrings
+
+## Recent Fixes & Improvements (July 2026)
+
+### Bugs Fixed
+1. **ThreadPoolExecutor false parallelism in `/predict/batch`**: Replaced with sequential loop — model inference is CPU-bound, threads just queue on GIL anyway.
+2. **`get_all()` double-loaded `load_dynamic()`**: Changed to single load, reuse variable.
+3. **Global `predictor_lock` serialized ALL requests**: Moved lock into `predictor.py` as `_inference_lock` wrapping ~50ms of model forward/backward only. DNS/SSL I/O (seconds) now runs in parallel across concurrent requests.
+4. **`eval(atob(...))` not in suspicious JS patterns**: Added `r"\batob\s*\("` to `SUSPICIOUS_JS_PATTERNS` in `html_dom_extractor.py`.
+5. **`s.string` fragile with multi-node script tags**: Changed to `s.get_text()` for robust inline JS extraction.
+
+### Improvements
+1. **`GET /health/llm`**: Returns `{available, provider: "ollama", model: "llama3.2:3b"}`. Frontend CopilotTab shows "AI Enhanced" (green) or "Template" (gray) badge.
+2. **`logging.info()` in `maybe_add_dynamic()`**: Logs domain, scan count, avg_score when auto-whitelisted.
+3. **Form action in `external_link_ratio`**: Now includes `<form action>` external domains, not just `<a href>`.
+4. **Theme toggle (dark/light)**: CSS custom properties + `data-theme` attribute + localStorage. Toggle button (☀/🌙) in header.
+5. **Skeleton loading**: `SkeletonResult` component replaces spinner — matches ResultCard layout with shimmer animation.
+6. **Responsive layout**: `flexWrap`, `auto-fit` grid, media queries at 768px/640px, overflow scroll for tabs.
+7. **Vite host `0.0.0.0`**: Mobile access via http://local-ip:3000 on same Wi-Fi.
+
+### New Files
+- `frontend/src/ThemeContext.jsx` — Dark/light theme provider
+- `test_phishing.html` — Manual test file with eval(atob), password form, document.write iframe
+- `test_genuine.html` — Manual test file with clean blog layout
+- `docs/technical_report.md` — Comprehensive 17-section technical document for thesis reference
+
+### Project State
+- All 8 fixable bugs/improvements from code review completed.
+- 1 known limitation: static DOM parsing vs dynamic JavaScript — would need Playwright/Puppeteer.
+- F1=0.977, AUC=0.993, multi-engine weighted voting, Ollama AI Copilot.
+- Last commit: `28a4563` (responsive layout). Push history: `9d9c8bc → a44852c → eadd0f3 → 14d0175 → 5a94e60 → 6809aba → 28a4563 → 4dc8774`
