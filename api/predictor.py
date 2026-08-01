@@ -16,7 +16,7 @@ from src.features.ssl_redirect_extractor import extract_ssl_redirect_features
 from src.brand_detection import get_brand_risk_score
 from api.reputation import get_domain_reputation, update_domain_reputation
 from api.explainer import generate_explanation
-from api.whitelist import is_whitelisted as _is_whitelisted_domain, maybe_add_dynamic as _maybe_add_dynamic
+from api.whitelist import get_domain_status as _get_domain_status
 from api.utils import get_registered_domain as _get_registered_domain, get_subdomain_info as _get_subdomain_info
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -41,6 +41,12 @@ SAFE_COUNTRY_TLDS = {
 
 
 TEMPERATURE = 2.8
+
+# Known-reputable reputation discount: even a trusted domain never yields a
+# hard 0% verdict. We still run the full analysis and only lower the final
+# score to this ceiling when the registered domain is reputable AND the full
+# hostname is covered by that reputation (no arbitrary user-content subdomain).
+REPUTABLE_SCORE_CEILING = 15.0
 
 
 class PhishingPredictor:
@@ -105,91 +111,12 @@ class PhishingPredictor:
         is_short = is_url_shortener(url)
         expanded_url = ssl_redirect.get("final_url", "") if ssl_redirect else ""
 
-        reg_domain = _get_registered_domain(url)
-        effective_url = url
-
-        redirect_whitelisted = False
-        subdomain_info = _get_subdomain_info(url)
-        if expanded_url:
-            final_domain = _get_registered_domain(expanded_url)
-            if final_domain and _is_whitelisted_domain(final_domain):
-                redirect_whitelisted = True
-                tab_features = self._get_feature_summary(self._extract_tabular(url))
-                reg_domain = _get_registered_domain(expanded_url) or ""
-                rd = {
-                    "url": url,
-                    "phishing_probability": 0.001,
-                    "is_phishing": False,
-                    "html_provided": html_content is not None,
-                    "brand_analysis": get_brand_risk_score(expanded_url, ""),
-                    "features": tab_features,
-                    "whitelisted": True,
-                    "redirect_whitelisted": True,
-                    "dns_whois": dns_whois,
-                    "ssl_redirect": ssl_redirect,
-                    "suspicious_tld": susp_tld,
-                    "is_shortener": is_short,
-                    "expanded_url": expanded_url,
-                    "effective_url": expanded_url,
-                    "engine_results": {
-                        "final_score": 0.0, "final_verdict": "safe",
-                        "engines": {
-                            "whitelist": {
-                                "score": 0, "verdict": "safe",
-                                "details": "Domain found in verified whitelist of known legitimate websites",
-                                "weight": 9,
-                            }
-                        },
-                    },
-                    "aggregate_score": 0.0,
-                    "engine_count": 1,
-                    "reputation": get_domain_reputation(reg_domain),
-                    "subdomain_info": subdomain_info,
-                }
-                rd["explanation"] = generate_explanation(rd)
-                return rd
-            effective_url = expanded_url
-
-        is_whitelisted = bool(
-            _get_registered_domain(effective_url)
-            and _is_whitelisted_domain(_get_registered_domain(effective_url))
-        )
-
-        if is_whitelisted:
-            brand_info = get_brand_risk_score(url, "")
-            tab_features = self._get_feature_summary(self._extract_tabular(url))
-            reg_domain = _get_registered_domain(effective_url) or ""
-            rd = {
-                "url": url,
-                "phishing_probability": 0.001,
-                "is_phishing": False,
-                "html_provided": html_content is not None,
-                "brand_analysis": brand_info,
-                "features": tab_features,
-                "whitelisted": True,
-                "redirect_whitelisted": False,
-                "dns_whois": dns_whois,
-                "ssl_redirect": ssl_redirect,
-                "suspicious_tld": susp_tld,
-                "is_shortener": is_short,
-                "expanded_url": expanded_url if expanded_url else None,
-                "engine_results": {
-                    "final_score": 0.0, "final_verdict": "safe",
-                    "engines": {
-                        "whitelist": {
-                            "score": 0, "verdict": "safe",
-                            "details": "Domain found in verified whitelist of known legitimate websites",
-                            "weight": 9,
-                        }
-                    },
-                },
-                "aggregate_score": 0.0,
-                "engine_count": 1,
-                "reputation": get_domain_reputation(reg_domain),
-                "subdomain_info": subdomain_info,
-            }
-            rd["explanation"] = generate_explanation(rd)
-            return rd
+        # The effective URL is the redirect destination when a cross-domain
+        # redirect exists; otherwise the original URL. Full analysis ALWAYS runs
+        # — whitelist/reputation is only a soft signal, never a hard verdict.
+        effective_url = expanded_url if expanded_url else url
+        reg_domain = _get_registered_domain(effective_url) or ""
+        subdomain_info = _get_subdomain_info(effective_url)
 
         tab_vec = self._extract_tabular(effective_url)
         dom_vec, clean_text = self._extract_html(html_content, effective_url) if html_content else (
@@ -235,37 +162,37 @@ class PhishingPredictor:
             if strong_infra or cdn_scale:
                 prob_val = min(prob_val, 0.15)
             else:
-                domain = _get_registered_domain(effective_url)
-                if domain and a_count >= 1 and ssl_ok and \
-                   any(domain.endswith(t) for t in SAFE_COUNTRY_TLDS):
+                if reg_domain and a_count >= 1 and ssl_ok and \
+                   any(reg_domain.endswith(t) for t in SAFE_COUNTRY_TLDS):
                     prob_val = min(prob_val, 0.15)
 
         brand_info = get_brand_risk_score(effective_url, clean_text)
         dom_signals = self._extract_dom_signals(dom_vec)
 
-        # Multi-engine analysis
-        from api.engines import ai_engine, dns_infra_engine, url_pattern_engine, brand_engine, combine_engines
+        # Multi-engine analysis (reputation/whitelist is a soft 5th engine)
+        from api.engines import (ai_engine, dns_infra_engine, url_pattern_engine,
+                                 brand_engine, reputation_engine, combine_engines)
 
         tab_features = self._get_feature_summary(tab_vec)
         ai_result = ai_engine(prob_val, tab_features, feature_importance, dns_whois, ssl_redirect)
         dns_result = dns_infra_engine(dns_whois, ssl_redirect)
         url_result = url_pattern_engine(effective_url, tab_features)
         br_result = brand_engine(effective_url, clean_text, brand_info)
+        domain_status = _get_domain_status(effective_url, reg_domain) if reg_domain else {}
+        rep_result = reputation_engine(domain_status)
         combined = combine_engines({
             "ai_model": ai_result,
             "dns_infrastructure": dns_result,
             "url_pattern": url_result,
             "brand": br_result,
+            "reputation": rep_result,
         })
         final_prob = combined["final_score"] / 100.0
 
-        reg_domain = _get_registered_domain(effective_url) or ""
         if reg_domain:
             update_domain_reputation(reg_domain, final_prob * 100,
                                      combined["final_verdict"])
             reputation = get_domain_reputation(reg_domain)
-            if _maybe_add_dynamic(reputation, reg_domain):
-                pass  # domain auto-added to dynamic whitelist
         else:
             reputation = {}
 
@@ -278,8 +205,9 @@ class PhishingPredictor:
             "brand_analysis": brand_info,
             "features": tab_features,
             "feature_importance": feature_importance,
-            "whitelisted": False,
+            "whitelisted": bool(domain_status.get("known_reputable_domain") and domain_status.get("subdomain_trusted")),
             "redirect_whitelisted": False,
+            "whitelist_status": domain_status,
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
             "dom_signals": dom_signals,

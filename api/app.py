@@ -260,7 +260,13 @@ def whitelist_add():
     err = validate_domain(domain)
     if err:
         return jsonify({"error": err}), 400
-    return jsonify(_add_whitelist(domain))
+    result = _add_whitelist(
+        domain,
+        added_by=data.get("added_by", "admin"),
+        ttl_days=data.get("ttl_days", 30),
+        reason=data.get("reason", ""),
+    )
+    return jsonify(result)
 
 
 @app.route("/whitelist", methods=["DELETE"])
@@ -273,7 +279,7 @@ def whitelist_remove():
     err = validate_domain(domain)
     if err:
         return jsonify({"error": err}), 400
-    return jsonify(_remove_whitelist(domain))
+    return jsonify(_remove_whitelist(domain, removed_by=data.get("removed_by", "admin")))
 
 
 @app.route("/explain", methods=["POST"])

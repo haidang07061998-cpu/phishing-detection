@@ -11,7 +11,7 @@ phishing-detection/
 │   ├── reputation.py       # Thread-safe reputation storage (JSON cache with threading.Lock)
 │   ├── feedback.py         # Feedback loop: FP/FN reporting to data/feedback/*.jsonl
 │   ├── webhooks.py         # Webhook config + dispatch to external SIEM/SOAR
-│   ├── whitelist.py        # Adaptive whitelist (static + dynamic auto-learned from reputation)
+│   ├── whitelist.py        # Reputation whitelist: known-reputable signal (TTL, audit, revoke), NOT a verdict override
 │   └── requirements.txt    # Python dependencies
 ├── data/
 │   ├── raw/                # Immutable source data
@@ -159,13 +159,14 @@ docker-compose up --build
 - **evaluation/deep_analysis.py** - Per-class metrics + error analysis
 
 ## Multi-Engine Architecture
-`api/engines.py` implements 4 virtual engines with weighted voting:
+`api/engines.py` implements 5 virtual engines with weighted voting:
 - **AI Model** (weight 4): Gated Fusion output + temperature scaling
 - **DNS Infrastructure** (weight 2): DNS records, SSL, domain age
 - **URL Pattern** (weight 2): URL features, TLD, keywords, entropy
 - **Brand Impersonation** (weight 1): Brand name detection
+- **Reputation** (weight 1, active only when domain is known reputable): whitelist signal, only lowers score
 
-`combine_engines()` returns `final_score` (0-100), `final_verdict`, and per-engine details.
+`combine_engines()` returns `final_score` (0-100), `final_verdict`, and per-engine details. `reputation_engine()` returns `None` when the domain is not known reputable, so the engine stays out of the weighted vote for unknown domains.
 
 ## Temperature Scaling
 `TEMPERATURE = 2.8` in `predictor.py`. Applied to logits before sigmoid: `logits /= self.temperature`.
@@ -231,12 +232,19 @@ Data leakage fixes applied to all training scripts + Kaggle notebooks:
 
 ### Improvements
 1. **`GET /health/llm`**: Returns `{available, provider: "ollama", model: "llama3.2:3b"}`. Frontend CopilotTab shows "AI Enhanced" (green) or "Template" (gray) badge.
-2. **`logging.info()` in `maybe_add_dynamic()`**: Logs domain, scan count, avg_score when auto-whitelisted.
-3. **Form action in `external_link_ratio`**: Now includes `<form action>` external domains, not just `<a href>`.
-4. **Theme toggle (dark/light)**: CSS custom properties + `data-theme` attribute + localStorage. Toggle button (☀/🌙) in header.
-5. **Skeleton loading**: `SkeletonResult` component replaces spinner — matches ResultCard layout with shimmer animation.
-6. **Responsive layout**: `flexWrap`, `auto-fit` grid, media queries at 768px/640px, overflow scroll for tabs.
-7. **Vite host `0.0.0.0`**: Mobile access via http://local-ip:3000 on same Wi-Fi.
+2. **Form action in `external_link_ratio`**: Now includes `<form action>` external domains, not just `<a href>`.
+3. **Theme toggle (dark/light)**: CSS custom properties + `data-theme` attribute + localStorage. Toggle button (☀/🌙) in header.
+4. **Skeleton loading**: `SkeletonResult` component replaces spinner — matches ResultCard layout with shimmer animation.
+5. **Responsive layout**: `flexWrap`, `auto-fit` grid, media queries at 768px/640px, overflow scroll for tabs.
+6. **Vite host `0.0.0.0`**: Mobile access via http://local-ip:3000 on same Wi-Fi.
+
+### Whitelist = reputation signal, NOT a verdict override (Aug 2026)
+- `get_domain_status()` returns `{known_reputable_domain, source, expires_at, subdomain_trusted, reason}`.
+- Subdomains of `USER_CONTENT_DOMAINS` (github.io, blogspot.com, netlify.app, ...) are NOT trusted — a known parent does not cover arbitrary user content subdomains.
+- Dynamic entries have TTL (default 30 days, configurable `ttl_days`), auto-expire + audited.
+- Every add/remove/expire is appended to `data/audit/whitelist.jsonl`.
+- Auto-whitelist after N scans was REMOVED — attacker can craft clean scan history. Whitelist is admin-only via POST /whitelist (requires API key).
+- Predictor runs the FULL analysis always. Reputation is a 5th engine (weight 1) that only lowers the score; strong phishing signals always override it.
 
 ### New Files
 - `frontend/src/ThemeContext.jsx` — Dark/light theme provider

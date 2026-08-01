@@ -1,10 +1,12 @@
 """Multi-engine analysis system for phishing detection.
 
-Simulates VirusTotal-style multi-engine architecture with 4 virtual engines:
+Simulates VirusTotal-style multi-engine architecture with 5 virtual engines:
 1. AI Model Engine — Gated Fusion deep learning model
 2. DNS Infrastructure Engine — DNS records, SSL, domain age
 3. URL Pattern Engine — URL features, keywords, TLD
 4. Brand Impersonation Engine — brand name detection
+5. Reputation Engine — known-reputable/whitelist signal (active only for
+   known reputable domains; only ever lowers the risk estimate)
 
 Each engine returns {score: 0-100, verdict: str, details: str}
 Final result via weighted voting + temperature-scaled calibration.
@@ -284,19 +286,46 @@ def brand_engine(url: str, text: str, brand_info: dict) -> dict:
     return {"score": score, "verdict": verdict, "details": "; ".join(details[:3]) or "No brand signals"}
 
 
+def reputation_engine(domain_status: dict) -> dict | None:
+    """Reputation signal based on the whitelist/known-reputable status.
+
+    Returns None when the domain is NOT known reputable (engine is inactive so
+    it never influences the vote). When active it only ever LOWERS the risk:
+    - reputable parent + full hostname covered -> score 0 (safe)
+    - reputable parent but untrusted subdomain (user content) -> mild suspicion,
+      i.e. the whitelist explicitly does NOT grant trust there.
+    """
+    if not domain_status or not domain_status.get("known_reputable_domain"):
+        return None
+    source = domain_status.get("source", "unknown")
+    if domain_status.get("subdomain_trusted"):
+        return {
+            "score": 0,
+            "verdict": "safe",
+            "details": f"Registered domain is a known reputable domain ({source}) — analysis still performed",
+        }
+    return {
+        "score": 50,
+        "verdict": "suspicious",
+        "details": "Reputable parent domain, but this subdomain is user content — reputation does not cover it, no discount applied",
+    }
+
+
 ENGINE_WEIGHTS = {
     "ai_model": 4,
     "dns_infrastructure": 2,
     "url_pattern": 2,
     "brand": 1,
+    "reputation": 1,
 }
 
 
 def combine_engines(results: dict) -> dict:
-    total_weight = sum(ENGINE_WEIGHTS.values())
+    present = {name: r for name, r in results.items() if r is not None}
+    total_weight = sum(ENGINE_WEIGHTS.get(name, 1) for name in present)
     weighted_sum = 0
     engine_details = {}
-    for name, result in results.items():
+    for name, result in present.items():
         w = ENGINE_WEIGHTS.get(name, 1)
         weighted_sum += result["score"] * w
         engine_details[name] = {
@@ -305,7 +334,7 @@ def combine_engines(results: dict) -> dict:
             "details": result["details"],
             "weight": w,
         }
-    final_score = round(weighted_sum / total_weight, 1)
+    final_score = round(weighted_sum / total_weight, 1) if total_weight else 0.0
     if final_score >= 60:
         final_verdict = "phishing"
     elif final_score >= 30:

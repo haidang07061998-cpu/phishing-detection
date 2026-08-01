@@ -28,7 +28,8 @@ User ──→ Frontend (React/Vite :3000)
               │
         ┌─────┘
         ▼
-    Adaptive Whitelist
+    Reputation Whitelist
+    (known-reputable signal)
 ```
 
 **Gated Fusion** — 3 branches:
@@ -68,7 +69,7 @@ cd frontend && npm run dev
 | POST | `/feedback` | Submit FP/FN correction |
 | GET | `/feedback/stats` | Feedback statistics |
 | GET/POST/DELETE | `/webhook` | Webhook config for SIEM/SOAR |
-| GET/POST/DELETE | `/whitelist` | Manage trusted domain list |
+| GET/POST/DELETE | `/whitelist` | Manage known-reputable domain list (admin-only, TTL, audited) |
 
 ### /predict Response
 
@@ -89,6 +90,7 @@ cd frontend && npm run dev
     }
   },
   "reputation": { "scans": 12, "avg_score": 9.2, "phishing_rate": 0.0 },
+  "whitelist_status": { "known_reputable_domain": false, "source": null, "expires_at": null, "subdomain_trusted": false, "reason": "" },
   "subdomain_info": null,
   "explanation": {
     "verdict_summary": "All 4 analysis engines returned benign — no phishing indicators detected.",
@@ -107,10 +109,13 @@ cd frontend && npm run dev
 
 ## System Components
 
-### Adaptive Whitelist (`api/whitelist.py`)
-- 80+ hardcoded trusted domains (Google, Microsoft, GitHub, etc.)
-- Dynamic auto-learned: domains with ≥5 scans and avg_score ≤15 auto-added
-- REST API for manual add/remove
+### Reputation Whitelist (`api/whitelist.py`)
+- **Không phải "safe verdict"**: whitelist chỉ là *known-reputable signal*. Predictor LUÔN chạy đầy đủ URL/brand/content analysis; reputation là engine thứ 5 (weight 1) chỉ **giảm nhẹ** điểm rủi ro — tín hiệu phishing mạnh luôn thắng.
+- Static: ~80 domain admin-verified (không hết hạn).
+- Dynamic: admin-only qua `POST /whitelist` (cần API key), có `ttl_days` (mặc định 30), auto-expire.
+- **Subdomain không tự tin cậy**: subdomain của `USER_CONTENT_DOMAINS` (github.io, blogspot.com, netlify.app, ...) KHÔNG được phủ bởi reputation của domain cha.
+- Mọi add/remove/expire được audit tại `data/audit/whitelist.jsonl`.
+- Auto-whitelist theo lịch sử quét đã bị **loại bỏ** (attacker có thể làm sạch lịch sử quét).
 
 ### Reputation (`api/reputation.py`)
 - Per-domain: scan count, average score, phishing rate

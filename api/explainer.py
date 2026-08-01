@@ -31,13 +31,13 @@ FINDING_TEMPLATES = {
     "phishing_keywords": "URL contains {count} security-related keywords ({keywords}) commonly used in phishing",
     "shortener": "URL shortener service can redirect to arbitrary destinations",
     "cross_domain_redirect": "URL redirects to a different domain ({dest}) — verify destination legitimacy",
-    "redirect_to_whitelisted": "URL redirects to {dest} (known legitimate domain) — redirect is safe",
+    "redirect_to_reputable": "URL redirects to {dest}, a known reputable domain — destination reputation noted, but the redirect itself still warrants caution",
     "no_html": "No HTML content analyzed — behavioral signals unavailable",
     "reputation_known": "Domain scanned {n} times before (avg score: {avg:.0f}/100) — {trend}",
     "subdomain_warning": "Subdomain \"{sub}\" on registered domain \"{reg}\" — parent domain {parent_verdict}",
     "reputable_asn": "Hosted on {asn} (reputable provider) — lowers risk",
     "risky_asn": "Hosted on {desc} — common among phishing campaigns",
-    "engine_consensus": "{n} of 4 analysis engines agree: {verdict}",
+    "engine_consensus": "{n} of {total} analysis engines agree: {verdict}",
     "engine_split": "Engines disagree: {ai}, {dns}, {url}, {brand}",
 }
 
@@ -67,8 +67,7 @@ def generate_explanation(result: dict) -> dict:
     domain = _get_domain(url)
     tld = _get_tld(url)
     path = _get_path(url)
-    is_whitelisted = result.get("whitelisted", False)
-    is_redirect_whitelisted = result.get("redirect_whitelisted", False)
+    whitelist_status = result.get("whitelist_status", {}) or {}
     aggregate_score = result.get("aggregate_score", 0)
     final_verdict = "safe"
     if aggregate_score >= 60:
@@ -86,19 +85,6 @@ def generate_explanation(result: dict) -> dict:
     findings = []
     score_contributors = []
 
-    if is_whitelisted:
-        rd = sub_info["registered_domain"] if sub_info else domain
-        if is_redirect_whitelisted:
-            summary = f"URL redirects to {result.get('expanded_url', 'a trusted domain')}, which is in the verified whitelist. The redirect destination is a known legitimate service."
-        else:
-            summary = f"{rd} is in the trusted whitelist of known legitimate websites. The 0.1% risk score reflects the whitelist override, not model analysis."
-        return {
-            "verdict_summary": summary,
-            "key_findings": ["Domain is listed in the verified whitelist of legitimate websites"],
-            "risk_factors": [],
-            "recommendations": ["No action required — domain is trusted"],
-        }
-
     # Analyze engine results
     engine_verdicts = {}
     for name, data in engines.items():
@@ -109,7 +95,7 @@ def generate_explanation(result: dict) -> dict:
     total_engines = len(engine_verdicts)
 
     if phishing_count >= 3:
-        findings.append(FINDING_TEMPLATES["engine_consensus"].format(n=phishing_count, verdict="phishing"))
+        findings.append(FINDING_TEMPLATES["engine_consensus"].format(n=phishing_count, total=total_engines, verdict="phishing"))
     elif safe_count == total_engines:
         findings.append(f"All {total_engines} analysis engines consider this URL safe")
     elif phishing_count > 0 and safe_count > 0:
@@ -217,14 +203,28 @@ def generate_explanation(result: dict) -> dict:
     cr = ssl.get("cross_domain_redirect", -1) if ssl else -1
     expanded_url = result.get("expanded_url") or result.get("effective_url") or ""
     if cr == 1 and expanded_url:
-        from api.whitelist import is_whitelisted as _wl
+        from api.whitelist import get_domain_status as _wl_status
         from api.utils import get_registered_domain as _get_rd
         final_domain = _get_rd(expanded_url)
-        if final_domain and _wl(final_domain):
-            findings.append(FINDING_TEMPLATES["redirect_to_whitelisted"].format(dest=final_domain))
+        if final_domain and _wl_status(expanded_url, final_domain).get("known_reputable_domain"):
+            findings.append(FINDING_TEMPLATES["redirect_to_reputable"].format(dest=final_domain))
         else:
             findings.append(FINDING_TEMPLATES["cross_domain_redirect"].format(dest=expanded_url[:60]))
             score_contributors.append("Cross-domain redirect")
+
+    # Reputation / whitelist signal (never a verdict on its own)
+    if whitelist_status.get("known_reputable_domain"):
+        if whitelist_status.get("subdomain_trusted"):
+            source = whitelist_status.get("source", "unknown")
+            findings.append(
+                f"Registered domain is a known reputable domain (source: {source}) — "
+                "full analysis still performed; reputation only lowers the risk estimate."
+            )
+        else:
+            findings.append(
+                "Registered domain is reputable, but this subdomain is user content "
+                "(e.g. <user>.github.io) — reputation does NOT extend here."
+            )
 
     # HTML analysis
     html_provided = result.get("html_provided", False)

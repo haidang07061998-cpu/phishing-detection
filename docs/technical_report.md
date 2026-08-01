@@ -33,19 +33,19 @@
 │                   Predictor Core                         │
 │                                                         │
 │  1. DNS/SSL extraction (ThreadPoolExecutor max_workers=2)│
-│  2. Whitelist check (static + dynamic auto-learned)     │
+│  2. Reputation whitelist check (known-reputable signal)  │
 │  3. URL redirect expansion + subdomain detection         │
 │  4. Gated Fusion inference (lock-protected, ~50ms)       │
 │  5. Gradient-based feature importance                    │
-│  6. Multi-engine weighted voting                         │
-│  7. Reputation update + auto-whitelist                   │
+│  6. Multi-engine weighted voting (incl. reputation eng.) │
+│  7. Reputation update (no auto-whitelist)                │
 │  8. Natural language explanation (template)              │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## 2. Multi-Engine System
 
-4 virtual engines hoạt động độc lập, kết hợp bằng weighted voting:
+5 virtual engines hoạt động độc lập, kết hợp bằng weighted voting:
 
 | Engine | Weight | Input | Mô tả |
 |--------|--------|-------|-------|
@@ -53,6 +53,7 @@
 | DNS Infrastructure | 2 | DNS records, SSL, domain age, ASN | Phân tích hạ tầng mạng |
 | URL Pattern | 2 | URL features, entropy, keywords, TLD | Phân tích cấu trúc URL |
 | Brand Impersonation | 1 | Brand detection + text matching | Phát hiện giả mạo thương hiệu |
+| Reputation | 1 | Whitelist known-reputable signal | Chỉ hoạt động khi domain known-reputable, chỉ hạ điểm — không bao giờ override tín hiệu phishing mạnh |
 
 Công thức weighted voting:
 ```
@@ -119,13 +120,16 @@ Gradient-based: ∂(loss)/∂(feature) × feature_value → xếp hạng đóng 
 - **Context builder**: Flags HTML/DNS/SSL: AVAILABLE / NOT AVAILABLE
 - **Frontend**: TypewriterText animation, skeleton loading, badge "AI Enhanced" / "Template"
 
-## 5. Adaptive Whitelist
+## 5. Reputation Whitelist (known-reputable signal)
 
-2 tầng:
-- **Static**: 80+ domains (Google, Microsoft, Facebook, Apple, Amazon, VN domains...)
-- **Dynamic auto-learned**: Domain tự động thêm sau 5 scans với avg_score ≤ 15
-- **Persistent storage**: data/dynamic_whitelist.json (JSONL)
-- Thread-safe với threading.Lock
+2 tầng, KHÔNG phải verdict override:
+- **Static**: ~80 domain admin-verified (Google, Microsoft, Facebook, Apple, Amazon, VN domains...), không hết hạn.
+- **Dynamic**: admin-only qua `POST /whitelist` (cần API key), có `ttl_days` (mặc định 30 ngày), auto-expire.
+- **Subdomain safety**: subdomain của `USER_CONTENT_DOMAINS` (github.io, blogspot.com, netlify.app...) KHÔNG được tin — domain cha known-reputable không phủ user content.
+- **Vai trò**: predictor luôn chạy đầy đủ analysis; reputation là engine thứ 5 (weight 1) chỉ hạ nhẹ điểm — tín hiệu phishing mạnh luôn thắng.
+- **Audit**: mọi add/remove/expire ghi `data/audit/whitelist.jsonl`.
+- **Persistent storage**: data/dynamic_whitelist.json (dict với metadata), thread-safe.
+- Auto-whitelist theo lịch sử quét đã bị **loại bỏ** (attacker có thể tạo lịch sử quét sạch).
 
 ## 6. Historical Reputation
 
@@ -179,9 +183,9 @@ Gradient-based: ∂(loss)/∂(feature) × feature_value → xếp hạng đóng 
 | POST | /webhook | Register webhook |
 | DELETE | /webhook | Delete webhook |
 | GET | /webhook | Get webhook config |
-| GET | /whitelist | Get whitelist (static + dynamic) |
-| POST | /whitelist/add | Add domain to dynamic whitelist |
-| POST | /whitelist/remove | Remove domain from dynamic whitelist |
+| GET | /whitelist | Get whitelist (static + dynamic + TTL metadata) |
+| POST | /whitelist | Add domain (admin, API key, ttl_days, reason) |
+| DELETE | /whitelist | Remove/revoke domain (admin, API key) |
 | GET | /reputation/<domain> | Get reputation stats |
 | GET | /health | Health check |
 | GET | /health/llm | LLM availability check |
@@ -256,10 +260,10 @@ phishing-detection/
 |------|---------|
 | api/app.py | Flask routes, error handling |
 | api/predictor.py | PhishingPredictor class — orchestration |
-| api/engines.py | 4 engine definitions + weighted voting |
+| api/engines.py | 5 engine definitions + weighted voting |
 | api/explainer.py | Template-based NLG explanation |
 | api/llm_explainer.py | Ollama LLM client |
-| api/whitelist.py | Static + dynamic adaptive whitelist |
+| api/whitelist.py | Reputation whitelist: known-reputable signal (TTL, audit, revoke) |
 | api/reputation.py | Domain reputation storage |
 | api/feedback.py | Feedback loop |
 | api/webhooks.py | Webhook dispatch |

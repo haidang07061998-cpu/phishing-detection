@@ -66,7 +66,8 @@ def _build_context(result: dict) -> str:
     lines.append(f"URL Length: {_v(feats.get('url_length'))}, Entropy: {_v(feats.get('entropy'))}")
     lines.append(f"Suspicious Keywords: {_v(feats.get('suspicious_keywords'))}, Subdomain Count: {_v(feats.get('subdomain_count'))}")
 
-    lines.append(f"Whitelisted: {result.get('whitelisted', False)}")
+    ws = result.get("whitelist_status") or {}
+    lines.append(f"Known Reputable Domain: {ws.get('known_reputable_domain', False)} (source={ws.get('source')}, subdomain_trusted={ws.get('subdomain_trusted')})")
 
     engines = result.get("engine_results", {}).get("engines", {})
     for name, data in engines.items():

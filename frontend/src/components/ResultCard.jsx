@@ -222,10 +222,10 @@ function getDetailBadge(key, value, extra) {
     const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d.toLowerCase()))
     if (isKnown) {
       return {
-        text: 'Yes (Whitelisted Destination)',
-        color: '#10b981',
-        bgColor: 'rgba(16, 185, 129, 0.1)',
-        borderColor: 'rgba(16, 185, 129, 0.4)',
+        text: 'Yes (Reputable Destination)',
+        color: '#eab308',
+        bgColor: 'rgba(234, 179, 8, 0.1)',
+        borderColor: 'rgba(234, 179, 8, 0.4)',
       }
     }
     return {
@@ -257,8 +257,8 @@ function Gauge({ value, whitelisted }) {
   const r = 85, cx = 102, cy = 96, stroke = 12
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - pct / 100)
-  const color = whitelisted ? '#10b981' : (pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981')
-  const label = whitelisted ? 'SAFE' : (pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE')
+  const color = pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981'
+  const label = pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE'
   return (
     <div style={{ textAlign: 'center' }}>
       <svg width="204" height="130" viewBox="0 0 204 130" style={{ display: 'block', margin: '0 auto' }}>
@@ -270,7 +270,7 @@ function Gauge({ value, whitelisted }) {
       </svg>
       {whitelisted && (
         <span style={{ color: '#10b981', fontSize: '0.65rem', fontWeight: 600, display: 'block', marginTop: '2px' }}>
-          {'Bypassed \u00B7 Whitelist'}
+          {'Reputable \u00B7 Analysis Performed'}
         </span>
       )}
     </div>
@@ -475,10 +475,10 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               border: '1px solid #10b98144', marginTop: '1rem',
             }}>
               <p style={{ margin: 0, color: '#10b981', fontSize: '0.85rem', fontWeight: 700 }}>
-                {'\u2713'} Whitelisted Domain
+                {'\u2713'} Known Reputable Domain
               </p>
               <p style={{ margin: '0.35rem 0 0', color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.4' }}>
-                This domain bypassed AI inference — it is in the trusted whitelist of known legitimate websites. The low confidence (0.1%) reflects the whitelist override, not model analysis.
+                This domain is known reputable, but a full URL / brand / content analysis was still performed. The risk score reflects the analysis — reputation only lowers it, never overrides it.
               </p>
             </div>
           )}
@@ -674,25 +674,25 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               <tbody>
                 {[
                   { label: 'Risk Score', value: `${pct}%`, color: barColor, tooltip: 'Calibrated multi-engine score (Temperature Scaling T=2.8 + weighted voting). Replaces raw sigmoid output for decision-making.' },
-                  { label: 'Whitelisted', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : 'var(--text-muted)' },
+                  { label: 'Reputable', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : 'var(--text-muted)', tooltip: 'Known reputable domain — a soft signal only. Full URL / brand / content analysis still runs and can override it.' },
                   { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
                   { label: 'Redirect', value: (() => {
                     const cr = result.ssl_redirect?.cross_domain_redirect
                     if (cr !== 1) return 'No'
                     const fu = (result.ssl_redirect?.final_url || '').toLowerCase()
                     const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
-                    return known ? 'Whitelisted Redirect' : 'Unknown Redirect'
+                    return known ? 'To Reputable Domain' : 'Unknown Destination'
                   })(), color: (() => {
                     const cr = result.ssl_redirect?.cross_domain_redirect
                     if (cr !== 1) return '#10b981'
                     const fu = (result.ssl_redirect?.final_url || '').toLowerCase()
                     const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
-                    return known ? '#10b981' : '#ef4444'
+                    return known ? '#eab308' : '#ef4444'
                   })() },
                   { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#10b981' },
                   { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : 'var(--text-muted)' },
                   { label: 'Features Extracted', value: `${features.length} signals`, color: 'var(--text-primary)' },
-                  { label: 'Model', value: 'Multi-Engine (4)', color: 'var(--text-primary)' },
+                  { label: 'Model', value: `Multi-Engine (${result.engine_count || 5})`, color: 'var(--text-primary)' },
                   { label: 'Scan Time', value: scanTime, color: 'var(--text-muted)' },
                 ].map((row, i) => (
                   <tr key={i}>
@@ -980,7 +980,7 @@ function ResultCard({ result }) {
             borderRadius: '8px', background: '#142a15', border: '1px solid #10b98144',
           }}>
             <p style={{ margin: 0, color: '#10b981', fontSize: '0.8rem' }}>
-              {'\u2713'} This domain is in the trusted whitelist of known legitimate websites.
+              {'\u2713'} Known reputable domain — full analysis was still performed; reputation only lowers the risk estimate.
             </p>
           </div>
         )}
@@ -1199,8 +1199,6 @@ function FeedbackButton({ result }) {
     }
     setSending(false)
   }
-
-  if (result.whitelisted) return null
 
   return (
     <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
