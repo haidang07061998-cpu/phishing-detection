@@ -121,7 +121,7 @@ def health_llm():
 @app.route("/predict", methods=["POST"])
 @reject_oversized_html
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
-@require_api_key
+@require_api_key(scope="scan")
 def predict():
     data = request.get_json(force=True)
     if not data or "url" not in data:
@@ -167,7 +167,7 @@ def predict():
 
 @app.route("/predict/batch", methods=["POST"])
 @rate_limit(minute=config.RATE_MIN // 2 or 1, hour=config.RATE_HOUR // 2 or 1)
-@require_api_key
+@require_api_key(scope="scan")
 def predict_batch():
     data = request.get_json(force=True)
     if not data or "urls" not in data:
@@ -218,7 +218,7 @@ def predict_batch():
 
 @app.route("/domain", methods=["POST"])
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
-@require_api_key
+@require_api_key(scope="scan")
 def domain_lookup():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
@@ -248,7 +248,7 @@ def domain_lookup():
 
 @app.route("/ip", methods=["POST"])
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
-@require_api_key
+@require_api_key(scope="scan")
 def ip_lookup():
     data = request.get_json(force=True)
     if not data or "ip" not in data:
@@ -278,7 +278,7 @@ def ip_lookup():
 
 @app.route("/feedback", methods=["POST"])
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
-@require_api_key
+@require_api_key(scope="feedback")
 def feedback():
     data = request.get_json(force=True)
     if not data or "url" not in data or "feedback_type" not in data:
@@ -298,16 +298,22 @@ def feedback():
 
 
 @app.route("/feedback/stats", methods=["GET"])
+@require_api_key(scope="reports")
 def feedback_stats():
     return jsonify(get_feedback_stats())
 
 
-@app.route("/webhook", methods=["GET", "POST", "DELETE"])
+@app.route("/webhook", methods=["GET"])
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
 @require_api_key
-def webhook():
-    if request.method == "GET":
-        return jsonify(get_webhook())
+def webhook_get():
+    return jsonify(get_webhook())
+
+
+@app.route("/webhook", methods=["POST", "DELETE"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key(scope="admin")
+def webhook_manage():
     if request.method == "DELETE":
         return jsonify(delete_webhook())
     data = request.get_json(force=True)
@@ -326,7 +332,7 @@ def whitelist_get():
 
 
 @app.route("/whitelist", methods=["POST"])
-@require_api_key
+@require_api_key(scope="admin")
 def whitelist_add():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
@@ -397,7 +403,7 @@ def threat_get():
 
 
 @app.route("/threat", methods=["POST"])
-@require_api_key
+@require_api_key(scope="admin")
 def threat_add():
     from api.threat_db import add_entry
     data = request.get_json(force=True)
@@ -415,7 +421,7 @@ def threat_add():
 
 
 @app.route("/threat", methods=["DELETE"])
-@require_api_key
+@require_api_key(scope="admin")
 def threat_remove():
     from api.threat_db import remove_entry
     data = request.get_json(force=True)
@@ -425,7 +431,7 @@ def threat_remove():
 
 
 @app.route("/whitelist", methods=["DELETE"])
-@require_api_key
+@require_api_key(scope="admin")
 def whitelist_remove():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
@@ -470,7 +476,7 @@ def history_export():
 
 @app.route("/explain", methods=["POST"])
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
-@require_api_key
+@require_api_key(scope="scan")
 def explain():
     data = request.get_json(force=True)
     if not data or "question" not in data or "result" not in data:

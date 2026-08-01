@@ -184,12 +184,14 @@ docker-compose up --build
 - `GET /history` → recent records + summary counts (total, verdicts, threat_db_hits)
 - `GET /history/export?format=csv|json` → full export
 - `GET /threat` → blocklist entries (local + community), `POST /threat` → add, `DELETE /threat` → remove (admin scope)
+- `GET /whitelist` → list, `POST /whitelist` → add, `DELETE /whitelist` → remove (admin scope for write)
 - Frontend `Reports` tab (`ReportsPanel.jsx`) shows summary cards, filterable history table, JSON/CSV export (via authenticated fetch + blob download), and blocklist add/remove.
 
 ## API Key Management
 `api/security.py` supports two key sources:
 - **Env keys** (`PHISHGUARD_API_KEYS`) — legacy, always granted full `admin` scope.
 - **Registry keys** (`data/api_keys.json`, SHA-256 hashed secrets) — managed via `/keys` endpoints with scopes `admin`/`scan`/`feedback`/`reports`, optional expiry + IP allowlist. Plaintext secret returned once at creation.
+- Endpoint scopes: `scan` → `/predict`, `/predict/batch`, `/domain`, `/ip`, `/explain`; `feedback` → `/feedback`; `reports` → `/history`, `/history/export`, `/feedback/stats`; `admin` → `/keys`, `/threat` (POST/DELETE), `/whitelist` (POST/DELETE), `/webhook` (POST/DELETE). Read-only GETs (`/webhook`, `/whitelist`, `/threat`) require any valid key.
 - Auth is a no-op only when auth is disabled AND the registry is empty. Scope checks return 403; missing/invalid keys return 401.
 
 ## Temperature Scaling
