@@ -183,7 +183,7 @@ docker-compose up --build
 `combine_engines()` returns `final_score` (0-100), `final_verdict`, and per-engine details. `reputation_engine()` returns `None` when the domain is not known reputable, so the engine stays out of the weighted vote for unknown domains.
 
 ## Scan History & Reports
-`api/history.py` appends a row to `data/scan_history.jsonl` on every predict/domain/ip scan (capped at `MAX_RECORDS = 20000`).
+`api/history.py` appends a row to `data/scan_history.jsonl` on every predict/domain/ip scan (capped at `MAX_RECORDS = 20000` — enforced: past the cap the oldest lines are dropped down to `MAX_RECORDS - TRIM_BUFFER` so the file rewrite only happens every 500 appends).
 - `GET /history` → recent records + summary counts (total, verdicts, threat_db_hits)
 - `GET /history/export?format=csv|json` → full export
 - `GET /threat` → blocklist entries (local + community), `POST /threat` → add, `DELETE /threat` → remove (admin scope)
@@ -202,6 +202,7 @@ docker-compose up --build
 - **Type-guard tất cả POST body**: `/predict` (`url`), `/predict/batch` (`urls` là list non-empty ≤50, mỗi phần tử string), `/domain`, `/ip`, `/feedback` (`url`, `feedback_type`), `/explain` (`question` string, `result` object), `/whitelist`, `/threat` (`value` string) đều trả **400** khi kiểu sai thay vì 500. (Trước đây `data["url"].strip()` crash 500 khi client gửi `{"url": 123}`.)
 ## Temperature Scaling
 `DEFAULT_TEMPERATURE = 2.8` in `predictor.py`. Precedence: `PHISHGUARD_TEMPERATURE` env → `data/models/temperature.json` (tạo bởi `src/evaluation/calibrate.py`) → default 2.8. Applied to logits before sigmoid: `logits /= self.temperature`.
+- **Trạng thái hiện tại**: `data/models/temperature.json` đang **MISSING** trên máy này (thiếu `mendeley_full/data.jsonl` + `split.json`; `preprocess_mendeley.py` + `calibrate.py` cần nạp 5 checkpoint ModernBERT ~582MB mỗi fold → OOM trên máy 7.7GB RAM). Production đang dùng **T = 2.8 mặc định**. Muốn áp dụng calibration phải chạy trên Kaggle/GPU: `python -m src.preprocess_mendeley --dynamic` → `python -m src.evaluation.calibrate` → copy `temperature.json` về `data/models/`.
 
 ## Inference Alignment & Performance (Aug 2026)
 - **Per-fold normalization BẮT BUỘC**: training (`train_proposed.py`) và `evaluate.py` chuẩn hóa URL/DOM features per-fold bằng `(x - mean)/std`. `predictor.py` đọc `data/models/proposed_folds.json` và áp dụng đúng scaler của fold tương ứng trước inference. KHÔNG được đưa feature thô vào model (bug OOD).

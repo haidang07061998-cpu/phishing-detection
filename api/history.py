@@ -5,8 +5,11 @@ Every ``/predict``, ``/domain`` and ``/ip`` response is appended to
 listing (with filters) and export to JSON / CSV so a security operations team
 can pull the raw data into their own tools.
 
-History is append-only and capped per file day; large deployments should ship
-the file to their SIEM/ELK via webhooks or log shippers.
+History is append-only and capped at ``MAX_RECORDS`` lines — once the file
+exceeds the cap the oldest lines are dropped (kept under the cap with a trim
+buffer so a full rewrite only happens every ``TRIM_BUFFER`` appends). Large
+deployments should ship the file to their SIEM/ELK via webhooks or log
+shippers.
 """
 
 import csv
@@ -21,6 +24,41 @@ HISTORY_PATH = Path(__file__).resolve().parents[1] / "data" / "scan_history.json
 _history_lock = threading.Lock()
 
 MAX_RECORDS = 20000
+TRIM_BUFFER = 500  # keep this many lines below MAX_RECORDS before rewriting
+
+# In-memory line count so we don't re-scan the file on every append. Guarded by
+# _history_lock. Lazy-initialized from the file on first append.
+_line_count: int | None = None
+
+
+def _load_line_count() -> int:
+    """Count current lines on disk (O(n), but only at startup / after trim)."""
+    if not HISTORY_PATH.exists():
+        return 0
+    with open(HISTORY_PATH, "r", encoding="utf-8") as f:
+        return sum(1 for _ in f)
+
+
+def _trim_history() -> None:
+    """Drop oldest lines so the file stays at MAX_RECORDS - TRIM_BUFFER.
+
+    Caller must hold _history_lock. A TRIM_BUFFER margin means the cap is only
+    re-checked (and the file rewritten) every TRIM_BUFFER appends instead of on
+    every single append past the cap.
+    """
+    global _line_count
+    if not HISTORY_PATH.exists():
+        _line_count = 0
+        return
+    with open(HISTORY_PATH, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    target = max(1, MAX_RECORDS - TRIM_BUFFER)
+    if len(lines) <= MAX_RECORDS:
+        _line_count = len(lines)
+        return
+    with open(HISTORY_PATH, "w", encoding="utf-8") as f:
+        f.writelines(lines[-target:])
+    _line_count = target
 
 
 def _now_iso() -> str:
@@ -44,9 +82,15 @@ def append_scan(record: dict) -> None:
         "latency_ms": record.get("latency_ms"),
     }
     with _history_lock:
+        global _line_count
+        if _line_count is None:
+            _line_count = _load_line_count()
         HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(HISTORY_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        _line_count += 1
+        if _line_count > MAX_RECORDS:
+            _trim_history()
 
 
 def _iter_records():
