@@ -146,6 +146,11 @@ def _fetch_feed(url: str, timeout: float = 15.0) -> dict:
 
     Supports plain-line lists, PhishTank-style CSV (url column), or a
     single-column feed. Returns {value: {source, notes}}.
+
+    PhishTank CSV has a header row like ``phish_id,url,phish_detail_url,...`` so
+    the URL is NOT necessarily the first column — we parse the header and read
+    the ``url`` column by name. Feeds without a ``url`` column (or a plain line
+    list) fall back to treating each line as a URL.
     """
     import urllib.request
     req = urllib.request.Request(url, headers={"User-Agent": "phishguard-threat-feed"})
@@ -154,8 +159,38 @@ def _fetch_feed(url: str, timeout: float = 15.0) -> dict:
 
     entries: dict = {}
     lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
-    sample = lines[0].lower() if lines else ""
-    is_csv = "," in sample and any(h in sample for h in ("url", "phish", "id"))
+    if not lines:
+        return entries
+
+    header = None
+    url_col = None
+    is_csv = "," in lines[0]
+    if is_csv:
+        try:
+            header = next(csv.reader(io.StringIO(lines[0])))
+        except (csv.Error, StopIteration):
+            header = None
+        if header:
+            lower = [h.strip().lower() for h in header]
+            if any(h in ("url", "phishing_url", "phish_url", "target_url") for h in lower):
+                # Header row found — locate the URL column by name.
+                for i, h in enumerate(lower):
+                    if h in ("url", "phishing_url", "phish_url", "target_url"):
+                        url_col = i
+                        break
+                # Skip the header row itself (processed above).
+                lines = lines[1:]
+
+    def _url_from_row(row: list[str]) -> str | None:
+        if url_col is not None:
+            if url_col < len(row):
+                return row[url_col]
+            return None
+        # No URL column detected: scan columns for a plausible URL.
+        for cell in row:
+            if "://" in cell:
+                return cell
+        return None
 
     for ln in lines:
         value = ln
@@ -166,9 +201,8 @@ def _fetch_feed(url: str, timeout: float = 15.0) -> dict:
                 continue
             if not row:
                 continue
-            candidate = row[0]
-            if "://" not in candidate and "url" in candidate:
-                # header row
+            candidate = _url_from_row(row)
+            if not candidate:
                 continue
             value = candidate
         value = value.strip().lower().strip("\"'")

@@ -168,7 +168,7 @@ docker-compose up --build
 - **brand_detection/** - Brand impersonation detection via URL + text matching
 - **evaluation/generate_figures.py** - matplotlib/seaborn charts
 - **evaluation/deep_analysis.py** - Per-class metrics + error analysis
-- **evaluation/calibrate.py** - Temperature scaling on held-out test → data/models/temperature.json
+- **evaluation/calibrate.py** - Temperature scaling fit on a CALIBRATION subset of the held-out test; the remaining half is the untouched final test (T never tuned on it) → data/models/temperature.json
 - **evaluation/benchmark.py** - Latency/throughput/memory benchmark → results/benchmark.json
 
 ## Multi-Engine Architecture
