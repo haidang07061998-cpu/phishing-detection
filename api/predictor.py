@@ -105,25 +105,28 @@ def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _probability_band(raw_logit: float, temperature: float) -> dict:
-    """Plausible probability band around a point estimate.
+def _probability_band(prob: float, temperature: float) -> dict:
+    """Plausible probability band around a FINAL (possibly adjusted) probability.
 
     The model outputs a single logit; without a full Bayesian treatment we
-    approximate an uncertainty band by pushing the logit ± one heuristic
-    logit-standard-deviation (UNCERTAINTY_LOGIT_MARGIN) through the same
-    temperature-scaled sigmoid. Used for the UI confidence display only.
+    approximate an uncertainty band by pushing the probability's logit ± one
+    heuristic logit-standard-deviation (UNCERTAINTY_LOGIT_MARGIN) through the
+    same temperature-scaled sigmoid. Built from the final probability (after
+    any heuristic adjustments such as the infrastructure sanity check) so the
+    band always brackets the probability shown in the UI.
     """
     import math
 
     def _sig(x: float) -> float:
         return 1.0 / (1.0 + math.exp(-x))
 
-    p = _sig(raw_logit / temperature)
-    lo = _sig((raw_logit - UNCERTAINTY_LOGIT_MARGIN) / temperature)
-    hi = _sig((raw_logit + UNCERTAINTY_LOGIT_MARGIN) / temperature)
+    p = min(max(prob, 1e-7), 1 - 1e-7)
+    logit_p = math.log(p / (1 - p))
+    lo = _sig(logit_p - UNCERTAINTY_LOGIT_MARGIN / temperature)
+    hi = _sig(logit_p + UNCERTAINTY_LOGIT_MARGIN / temperature)
     return {
-        "low": round(min(p, lo), 4),
-        "high": round(max(p, hi), 4),
+        "low": round(lo, 4),
+        "high": round(hi, 4),
     }
 
 
@@ -480,7 +483,6 @@ class PhishingPredictor:
                 tokens["attention_mask"].to(DEVICE),
                 dom_tensor,
             )
-            raw_logit = float(logits.detach().cpu().item())
             logits = logits / self.temperature
             prob = torch.sigmoid(logits)
             prob_val = prob.item()
@@ -556,7 +558,7 @@ class PhishingPredictor:
             "latency_ms": round((time.monotonic() - _t_start) * 1000, 1),
             "effective_url": effective_url if effective_url != url else None,
             "phishing_probability": round(prob_val, 4),
-            "probability_band": _probability_band(raw_logit, self.temperature),
+            "probability_band": _probability_band(prob_val, self.temperature),
             "is_phishing": final_prob >= 0.5,
             "html_provided": html_provided,
             "analysis_quality": analysis_quality,

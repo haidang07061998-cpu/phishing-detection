@@ -1,6 +1,14 @@
 """
 Generate evaluation figures for phishing detection models.
 Saves all figures to results/figures/.
+
+IMPORTANT — figures are only ever drawn from REAL predictions:
+- Confusion matrices and ROC curves are computed from the held-out test
+  predictions saved by the training scripts (`data/predictions_*.npz`).
+- If a model's prediction file is missing, its confusion matrix / ROC curve is
+  SKIPPED (with a warning) instead of being fabricated from aggregate metrics —
+  synthetic curves are misleading and must not be used in reports/thesis.
+- Bar comparisons (metrics, FPR) use the real metrics from evaluation_results.json.
 """
 
 import json, sys, warnings
@@ -11,6 +19,7 @@ warnings.filterwarnings('ignore')
 
 PROJECT = Path(__file__).resolve().parents[2]
 MODEL_DIR = PROJECT / 'data' / 'models'
+DATA_DIR = PROJECT / 'data'
 FIGURE_DIR = PROJECT / 'results' / 'figures'
 FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -28,6 +37,42 @@ except ImportError:
     sns = None
 
 sns_available = sns is not None
+
+# Model name keyword -> prediction artifact (written by train_*.py).
+PREDICTION_FILES = [
+    ("baseline 1", "predictions_baseline1.npz"),
+    ("baseline 2", "predictions_baseline2.npz"),
+    ("gatedfusion", "predictions_proposed.npz"),
+]
+
+
+def _prediction_path(model_name: str) -> Path | None:
+    """Return the predictions npz path for a model, or None if unmatched."""
+    key = (model_name or "").lower()
+    for keyword, fname in PREDICTION_FILES:
+        if keyword in key:
+            return DATA_DIR / fname
+    return None
+
+
+def _load_predictions(model_name: str) -> tuple[np.ndarray, np.ndarray] | None:
+    """Load (labels, probability_scores) for a model from its npz file.
+
+    Accepts both the `preds`/`labels` (baseline1, concatenated folds) and
+    `test_preds_mean`/`test_labels` (baseline2/proposed, held-out test) layouts.
+    Returns None when the file is absent.
+    """
+    path = _prediction_path(model_name)
+    if path is None or not path.exists():
+        return None
+    try:
+        z = np.load(path)
+        labels = z['labels'] if 'labels' in z else z['test_labels']
+        probs = z['preds'] if 'preds' in z else z['test_preds_mean']
+        return np.asarray(labels).astype(int), np.asarray(probs).astype(float)
+    except (KeyError, ValueError, OSError) as exc:
+        print(f"  Warning: could not read predictions for '{model_name}' ({path}): {exc}")
+        return None
 
 
 def load_evals():
@@ -85,30 +130,38 @@ def plot_model_comparison(evals):
 
 
 def plot_confusion_matrices(evals):
+    """Confusion matrices from REAL held-out predictions (skips missing data)."""
+    from sklearn.metrics import confusion_matrix as cm_fn
+
     print("Generating confusion_matrices.png...")
     if not evals:
         return
 
-    n = len(evals)
+    loaded = []
+    for name, e in evals.items():
+        pred = _load_predictions(name)
+        if pred is None:
+            print(f"  Warning: no predictions file for '{name[:40]}' — skipping its "
+                  f"confusion matrix (run training to generate predictions_*.npz).")
+            continue
+        labels, probs = pred
+        preds = (probs >= 0.5).astype(int)
+        if len(labels) == 0:
+            continue
+        cm = cm_fn(labels, preds, labels=[0, 1])
+        loaded.append((name, e, cm))
+
+    if not loaded:
+        print("  No real predictions available — confusion_matrices.png NOT generated "
+              "(avoids fabricating data).")
+        return
+
+    n = len(loaded)
     fig, axes = plt.subplots(1, n, figsize=(5 * n, 4))
     if n == 1:
         axes = [axes]
 
-    colors = ['#22c55e', '#ef4444']
-
-    for ax, (name, e) in zip(axes, evals.items()):
-        acc = e.get('accuracy', 0)
-        f1 = e.get('f1', 0)
-        precision = e.get('precision', 0)
-        recall = e.get('recall', 0)
-
-        tn = int(acc * 100)
-        fp = int((1 - precision) * 100) if precision > 0 else 0
-        fn = int((1 - recall) * 100) if recall > 0 else 0
-        tp = int(f1 * 100)
-
-        cm = np.array([[tn, fp], [fn, tp]])
-
+    for ax, (name, e, cm) in zip(axes, loaded):
         if sns_available:
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, cbar=False,
                         xticklabels=['Pred Benign', 'Pred Phish'],
@@ -123,8 +176,10 @@ def plot_confusion_matrices(evals):
             ax.set_xticklabels(['Pred Benign', 'Pred Phish'])
             ax.set_yticklabels(['True Benign', 'True Phish'])
 
+        tn, fp, fn, tp = cm.ravel()
+        acc = (tn + tp) / max(tn + fp + fn + tp, 1)
         short_name = name[:25]
-        ax.set_title(f'{short_name}\nAcc={acc:.4f} | F1={f1:.4f}', fontsize=10)
+        ax.set_title(f'{short_name}\nAcc={acc:.4f}', fontsize=10)
 
     plt.tight_layout()
     plt.savefig(str(FIGURE_DIR / 'confusion_matrices.png'), dpi=150, bbox_inches='tight')
@@ -133,18 +188,37 @@ def plot_confusion_matrices(evals):
 
 
 def plot_roc_curves(evals):
+    """ROC curves from REAL held-out predictions (skips missing data)."""
+    from sklearn.metrics import roc_curve, roc_auc_score
+
     print("Generating roc_curves.png...")
     if not evals:
+        return
+
+    loaded = []
+    for name, e in evals.items():
+        pred = _load_predictions(name)
+        if pred is None:
+            print(f"  Warning: no predictions file for '{name[:40]}' — skipping its "
+                  f"ROC curve (run training to generate predictions_*.npz).")
+            continue
+        labels, probs = pred
+        if len(labels) == 0 or len(np.unique(labels)) < 2:
+            continue
+        fpr, tpr, _ = roc_curve(labels, probs)
+        auc = roc_auc_score(labels, probs)
+        loaded.append((name, fpr, tpr, auc))
+
+    if not loaded:
+        print("  No real predictions available — roc_curves.png NOT generated "
+              "(avoids fabricating data).")
         return
 
     fig, ax = plt.subplots(figsize=(8, 6))
     colors = ['#38bdf8', '#818cf8', '#f472b6']
 
-    for i, (name, e) in enumerate(evals.items()):
-        auc = e.get('auc', 0)
+    for i, (name, fpr, tpr, auc) in enumerate(loaded):
         label = f'{name[:30]} (AUC={auc:.4f})'
-        fpr = np.linspace(0, 1, 100)
-        tpr = np.exp(-((fpr - 0.1) ** 2) / (2 * 0.1 ** 2)) * auc
         ax.plot(fpr, tpr, color=colors[i % len(colors)], label=label, linewidth=2)
 
     ax.plot([0, 1], [0, 1], 'k--', alpha=0.5, label='Random')

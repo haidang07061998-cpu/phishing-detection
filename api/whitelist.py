@@ -140,7 +140,7 @@ def get_domain_status(hostname: str, registered_domain: str | None = None) -> di
     - subdomain_trusted: whether the full hostname is covered by the reputation.
       Subdomains of USER_CONTENT_DOMAINS are NOT trusted.
     """
-    rd = (registered_domain or hostname or "").lower().lstrip("www.")
+    rd = (registered_domain or hostname or "").lower().removeprefix("www.")
     status = {
         "known_reputable_domain": False,
         "source": None,
@@ -189,7 +189,7 @@ def add_dynamic(domain: str, added_by: str = "admin", ttl_days: int = DEFAULT_TT
     """
     if not domain:
         return {"status": "error", "error": "Domain cannot be empty"}
-    domain = domain.strip().lower().lstrip("www.")
+    domain = domain.strip().lower().removeprefix("www.")
     ttl_days = max(MIN_TTL_DAYS, min(int(ttl_days), MAX_TTL_DAYS))
     now = _now()
     with _dynamic_lock:

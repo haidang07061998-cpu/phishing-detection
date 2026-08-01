@@ -43,7 +43,7 @@ def check_user_agent_cloaking(url, timeout=10):
             results[label] = {"error": "URL rejected by safety policy"}
             continue
         try:
-            info = safe_get(url, timeout=timeout)
+            info = safe_get(url, timeout=timeout, headers={"User-Agent": ua})
             if not info["ok"]:
                 results[label] = {"error": info["error"]}
                 continue

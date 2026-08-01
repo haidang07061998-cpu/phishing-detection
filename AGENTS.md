@@ -166,7 +166,7 @@ docker-compose up --build
 ## New Modules
 - **explainability/** - SHAP DeepExplainer for TabTransformer models
 - **brand_detection/** - Brand impersonation detection via URL + text matching
-- **evaluation/generate_figures.py** - matplotlib/seaborn charts
+- **evaluation/generate_figures.py** - matplotlib/seaborn charts. Confusion matrices + ROC curves are drawn **only from real held-out predictions** (`data/predictions_*.npz`, written by training scripts). If a model's npz is missing those figures are SKIPPED with a warning — never synthesized from aggregate metrics (would be misleading). Bar charts use real metrics from `evaluation_results.json`.
 - **evaluation/deep_analysis.py** - Per-class metrics + error analysis
 - **evaluation/calibrate.py** - Temperature scaling fit on a CALIBRATION subset of the held-out test; the remaining half is the untouched final test (T never tuned on it) → data/models/temperature.json
 - **evaluation/benchmark.py** - Latency/throughput/memory benchmark → results/benchmark.json
