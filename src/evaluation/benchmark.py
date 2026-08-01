@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from api.predictor import predictor
+from api.predictor import predictor, PhishingPredictor
 
 SAMPLE_URLS = [
     ("https://www.google.com", None),
@@ -57,7 +57,9 @@ def _rss_mb() -> float:
         return psutil.Process().memory_info().rss / (1024 * 1024)
 
 
-def run_benchmark(n: int = 20) -> dict:
+def run_benchmark(n: int = 20, do_cold: bool = False) -> dict:
+    global _do_cold
+    _do_cold = do_cold
     urls = SAMPLE_URLS[:n]
     if len(urls) < n:
         urls = (SAMPLE_URLS * (n // len(SAMPLE_URLS) + 1))[:n]
@@ -81,6 +83,24 @@ def run_benchmark(n: int = 20) -> dict:
         rss_deltas.append(_rss_mb() - base_rss)
 
     lat = np.array(latencies)
+
+    # Cold start (opt-in): first prediction on a fresh predictor with a cold
+    # extraction cache. Loads a second model into RAM (~600MB), so it is
+    # skipped by default on low-RAM machines. Enable with --cold.
+    cold_ms = None
+    if _do_cold:
+        try:
+            fresh = PhishingPredictor(
+                compute_feature_importance=predictor.compute_feature_importance,
+                extract_cache_ttl=0,  # no warm cache — forces real network I/O
+            )
+            t0 = time.perf_counter()
+            fresh.predict(SAMPLE_URLS[0][0], SAMPLE_URLS[0][1])
+            cold_ms = (time.perf_counter() - t0) * 1000.0
+            del fresh
+        except Exception as e:
+            print(f"  cold-start measurement skipped: {e}")
+
     report = {
         "n": len(urls),
         "n_errors": len(errors),
@@ -91,6 +111,9 @@ def run_benchmark(n: int = 20) -> dict:
         "mean_ms": round(float(lat.mean()), 1),
         "min_ms": round(float(lat.min()), 1),
         "max_ms": round(float(lat.max()), 1),
+        "warm_start_p50_ms": round(float(np.percentile(lat, 50)), 1),
+        "warm_start_p95_ms": round(float(np.percentile(lat, 95)), 1),
+        "cold_start_first_ms": round(float(cold_ms), 1) if cold_ms else None,
         "throughput_per_min": round(60.0 / float(lat.mean()) * 1000.0, 1),
         "rss_base_mb": round(base_rss, 1),
         "rss_max_delta_mb": round(float(max(rss_deltas)), 1),
@@ -99,9 +122,14 @@ def run_benchmark(n: int = 20) -> dict:
         "device": str(predictor.device),
         "temperature": predictor.temperature,
         "ensemble_folds": len(predictor.models),
+        "feature_importance": bool(predictor.compute_feature_importance),
+        "extract_cache": "redis" if getattr(predictor, "extract_cache", None) and getattr(predictor.extract_cache, "_ok", False) else "memory",
     }
 
-    print(f"  p50={report['p50_ms']}ms  p95={report['p95_ms']}ms  p99={report['p99_ms']}ms")
+    print(f"  warm  p50={report['warm_start_p50_ms']}ms  p95={report['warm_start_p95_ms']}ms  "
+          f"p99={report['p99_ms']}ms")
+    if report["cold_start_first_ms"]:
+        print(f"  cold  first={report['cold_start_first_ms']}ms")
     print(f"  mean={report['mean_ms']}ms  throughput≈{report['throughput_per_min']}/min  "
           f"errors={report['n_errors']}  rss+{report['rss_max_delta_mb']}MB")
     print(f"  aggregate_scores={report['aggregate_scores']}")
@@ -115,5 +143,7 @@ def run_benchmark(n: int = 20) -> dict:
 
 
 if __name__ == "__main__":
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 20
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    _do_cold = "--cold" in sys.argv
+    n = int(args[0]) if args else 20
     run_benchmark(n)

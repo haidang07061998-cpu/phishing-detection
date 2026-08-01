@@ -110,9 +110,17 @@ WEBHOOK_MAX_RETRIES = int(os.environ.get("PHISHGUARD_WEBHOOK_RETRIES", "3"))
 
 TEMPERATURE = float(os.environ.get("PHISHGUARD_TEMPERATURE", "2.8"))
 ENSEMBLE_FOLDS = int(os.environ.get("PHISHGUARD_ENSEMBLE_FOLDS", "1"))
-COMPUTE_IMPORTANCE = os.environ.get("PHISHGUARD_COMPUTE_IMPORTANCE", "1").strip().lower() in ("1", "true", "yes", "on")
+# Feature importance runs a backward pass through the model — significant extra
+# CPU cost per request. OFF by default; clients can still request it per-call
+# via {"explain": true} in the body.
+COMPUTE_IMPORTANCE = os.environ.get("PHISHGUARD_COMPUTE_IMPORTANCE", "0").strip().lower() in ("1", "true", "yes", "on")
 EXTRACT_CACHE_TTL = float(os.environ.get("PHISHGUARD_EXTRACT_CACHE_TTL", "300"))
 BATCH_WORKERS = int(os.environ.get("PHISHGUARD_BATCH_WORKERS", "1"))
+
+# Optional shared cache backend for DNS/SSL/redirect extraction. Empty (default)
+# uses the per-process in-memory _TTLCache; set a redis:// URL to share the
+# cache across workers/restarts. Requires the 'redis' package.
+REDIS_URL = os.environ.get("PHISHGUARD_REDIS_URL", "")
 
 # --------------------------------------------------------------------------
 # Known-threat database (blocklist)

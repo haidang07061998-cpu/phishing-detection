@@ -143,12 +143,12 @@ Các fix alignment + hiệu năng (Aug 2026), tất cả config-driven qua env:
 - **Token length khớp training**: inference dùng `max_length=128` (không còn 512) — model được fine-tune trên chuỗi 128 token.
 - **Temperature calibration**: `TEMPERATURE=2.8` mặc định; nếu `data/models/temperature.json` tồn tại (tạo bởi `src/evaluation/calibrate.py`) thì dùng giá trị calibrated; env `PHISHGUARD_TEMPERATURE` override.
 - **Fold ensemble (opt-in)**: `PHISHGUARD_ENSEMBLE_FOLDS=N` average logits của N fold checkpoints. Mặc định `1` (đơn fold, RAM thấp). Bật `5` cần ~1.4GB RAM (quantized).
-- **Feature importance theo yêu cầu**: `PHISHGUARD_COMPUTE_IMPORTANCE=0` bỏ backward pass mỗi request; client có thể override per-call với `{"explain": true/false}`.
-- **DNS/SSL extraction cache**: `PHISHGUARD_EXTRACT_CACHE_TTL=300` cache kết quả DNS/WHOIS/SSL/redirect trong bộ nhớ để giảm network I/O lặp (mặc định 300s, `0` = tắt).
+- **Feature importance theo yêu cầu**: `PHISHGUARD_COMPUTE_IMPORTANCE=0` (mặc định) bỏ backward pass mỗi request; client có thể override per-call với `{"explain": true/false}`.
+- **DNS/SSL extraction cache**: `PHISHGUARD_EXTRACT_CACHE_TTL=300` cache kết quả DNS/WHOIS/SSL/redirect để giảm network I/O lặp (mặc định 300s, `0` = tắt). `PHISHGUARD_REDIS_URL` (optional) chuyển cache sang Redis chia sẻ giữa workers/restart; fallback memory khi Redis không khả dụng.
 - **`analysis_quality`**: `"full"` khi HTML được parse, `"limited"` khi không có HTML/parse fail — kèm `analysis_reason`.
 - **Batch workers**: `PHISHGUARD_BATCH_WORKERS>1` chạy `/predict/batch` với thread pool nhỏ (overlap DNS/SSL I/O); model inference luôn serialize qua `_inference_lock`.
 
-Benchmark: `python -m src.evaluation.benchmark [n]` → ghi `results/benchmark.json` (p50/p95/p99, throughput, RSS delta, timeout rate).
+Benchmark: `python -m src.evaluation.benchmark [n] [--cold]` → ghi `results/benchmark.json` (warm p50/p95/p99, throughput, RSS delta, timeout rate; `--cold` đo thêm cold-start first-prediction ms nhưng tốn ~600MB RAM).
 
 ### Feedback Loop (`api/feedback.py`)
 - JSONL format (append-only, crash-safe)

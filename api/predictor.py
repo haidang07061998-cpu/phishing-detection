@@ -178,18 +178,67 @@ class _TTLCache:
             self._data[key] = (time.monotonic(), value)
 
 
+class _RedisCache:
+    """Optional shared extraction cache backed by Redis (multi-worker safe).
+
+    Falls back to the in-memory _TTLCache when Redis is unreachable, so the
+    API keeps working even if the Redis dependency/instance is unavailable.
+    """
+
+    def __init__(self, ttl_seconds: float = 300.0, url: str = ""):
+        self.ttl = ttl_seconds
+        self._url = url
+        self._fallback = _TTLCache(ttl_seconds=ttl_seconds)
+        self._redis = None
+        self._ok = False
+        if url:
+            try:
+                import redis
+                self._redis = redis.Redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
+                self._redis.ping()
+                self._ok = True
+            except Exception:
+                self._redis = None
+                self._ok = False
+
+    def get(self, key: str):
+        if self.ttl <= 0:
+            return None
+        if not self._ok:
+            return self._fallback.get(key)
+        try:
+            raw = self._redis.get("pg:" + key)
+            if raw is None:
+                return None
+            return json.loads(raw)
+        except Exception:
+            return self._fallback.get(key)
+
+    def set(self, key: str, value) -> None:
+        if self.ttl <= 0:
+            return
+        if not self._ok:
+            self._fallback.set(key, value)
+            return
+        try:
+            self._redis.setex("pg:" + key, int(self.ttl), json.dumps(value))
+        except Exception:
+            self._fallback.set(key, value)
+
+
 class PhishingPredictor:
     def __init__(self, checkpoint_path: str | Path | None = None,
                  temperature: float | None = None,
                  ensemble_folds: int = 1,
-                 compute_feature_importance: bool = True,
-                 extract_cache_ttl: float = 300.0):
+                 compute_feature_importance: bool = False,
+                 extract_cache_ttl: float = 300.0,
+                 redis_url: str = ""):
         self.device = DEVICE
         self.temperature = temperature if temperature and temperature > 0 else _load_temperature()
 
         self.ensemble_folds = max(int(ensemble_folds), 1)
         self.compute_feature_importance = compute_feature_importance
-        self.extract_cache = _TTLCache(ttl_seconds=extract_cache_ttl)
+        self.extract_cache = _RedisCache(ttl_seconds=extract_cache_ttl, url=redis_url)
 
         self.fold_meta = _load_fold_meta()
         self.models = []          # list[(model, fold_scaler_or_None)]
@@ -571,21 +620,33 @@ class PhishingPredictor:
     def lookup_domain(self, domain: str) -> dict:
         url = f"https://{domain}"
         dns_whois = self._extract_dns_whois(url)
-        from api.engines import dns_infra_engine, url_pattern_engine, brand_engine, combine_engines
-        dns_result = dns_infra_engine(dns_whois, {})
+        # Run SSL analysis too — passing {} makes dns_infra_engine treat SSL as
+        # invalid/unknown and inflate the risk score for perfectly healthy domains.
+        ssl_redirect = self._cached_ssl_redirect(url)
+        from api.engines import (dns_infra_engine, url_pattern_engine, brand_engine,
+                                 threat_db_engine, reputation_engine, combine_engines)
+        from api.threat_db import match_threat
+        dns_result = dns_infra_engine(dns_whois, ssl_redirect)
         url_result = url_pattern_engine(url, {})
         br_result = brand_engine(url, "", None)
+        reg_domain = _get_registered_domain(url) or ""
+        domain_status = _get_domain_status(url, reg_domain) if reg_domain else {}
+        rep_result = reputation_engine(domain_status)
+        threat_result = threat_db_engine(match_threat(url))
         combined = combine_engines({
             "ai_model": {"score": 0, "verdict": "safe", "details": "No model inference"},
             "dns_infrastructure": dns_result,
             "url_pattern": url_result,
             "brand": br_result,
+            "reputation": rep_result,
+            "threat_db": threat_result,
         })
         rep = get_domain_reputation(domain)
         return {
             "domain": domain,
             "timestamp": _utc_timestamp(),
             "dns_whois": dns_whois,
+            "ssl_redirect": ssl_redirect,
             "suspicious_tld": check_suspicious_tld(url),
             "type": "domain",
             "engine_results": combined,
@@ -645,8 +706,9 @@ def _make_predictor() -> PhishingPredictor:
     return PhishingPredictor(
         temperature=_env_float("PHISHGUARD_TEMPERATURE", 0) or None,
         ensemble_folds=_env_int("PHISHGUARD_ENSEMBLE_FOLDS", 1),
-        compute_feature_importance=_env_bool("PHISHGUARD_COMPUTE_IMPORTANCE", True),
+        compute_feature_importance=_env_bool("PHISHGUARD_COMPUTE_IMPORTANCE", False),
         extract_cache_ttl=_env_float("PHISHGUARD_EXTRACT_CACHE_TTL", 300.0),
+        redis_url=os.environ.get("PHISHGUARD_REDIS_URL", ""),
     )
 
 

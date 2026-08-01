@@ -154,8 +154,8 @@ $env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.deep_analysis
 $env:PYTHONIOENCODING='utf-8'; python -m src.brand_detection
 # Calibrate temperature scaling (needs mendeley_full + checkpoints)
 $env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.calibrate
-# Benchmark predictor latency/throughput/memory
-$env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.benchmark [n]
+# Benchmark predictor latency/throughput/memory (add --cold để đo cold-start, tốn ~600MB RAM thêm)
+$env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.benchmark [n] [--cold]
 # Docker compose
 docker-compose up --build
 ```
@@ -206,12 +206,13 @@ docker-compose up --build
 - **Per-fold normalization BẮT BUỘC**: training (`train_proposed.py`) và `evaluate.py` chuẩn hóa URL/DOM features per-fold bằng `(x - mean)/std`. `predictor.py` đọc `data/models/proposed_folds.json` và áp dụng đúng scaler của fold tương ứng trước inference. KHÔNG được đưa feature thô vào model (bug OOD).
 - **Token length = 128**: `MAX_SEQ_LEN = 128` trong predictor, khớp `train_proposed.py max_length=128`. Không dùng 512.
 - **Fold ensemble (opt-in)**: `PHISHGUARD_ENSEMBLE_FOLDS` (default 1). Mỗi fold model dùng scaler riêng của nó; logits được trung bình (mean) trước temperature scaling. Bật 5 cần ~1.4GB RAM (quantized) — máy 7.7GB RAM nên giữ 1.
-- **Feature importance opt-in**: `PHISHGUARD_COMPUTE_IMPORTANCE` (default True) + per-request `{"explain": bool}` override trong body POST `/predict`. Ensemble mode không tính gradient (trả vector 0).
-- **DNS/SSL extraction cache**: `_TTLCache` trong predictor (`PHISHGUARD_EXTRACT_CACHE_TTL`, default 300s). Cache kết quả DNS/WHOIS/SSL/redirect theo URL — giảm network I/O lặp.
+- **Feature importance opt-in**: `PHISHGUARD_COMPUTE_IMPORTANCE` (default **0 = OFF** — backward pass costs significant CPU) + per-request `{"explain": bool}` override trong body POST `/predict`. Ensemble mode không tính gradient (trả vector 0).
+- **DNS/SSL extraction cache**: `_TTLCache`/`_RedisCache` trong predictor (`PHISHGUARD_EXTRACT_CACHE_TTL`, default 300s). `PHISHGUARD_REDIS_URL` (optional, mặc định rỗng) → cache chia sẻ Redis giữa workers/restarts; fallback về memory khi Redis không khả dụng. Cache kết quả DNS/WHOIS/SSL/redirect theo URL — giảm network I/O lặp.
+- **`lookup_domain` có SSL analysis**: domain lookup chạy `_cached_ssl_redirect(url)` và truyền `ssl_redirect` vào `dns_infra_engine` (không còn truyền `{}` — trước đây engine xem SSL là không hợp lệ và cộng +40 điểm rủi ro cho domain khỏe mạnh).
 - **Batch workers**: `PHISHGUARD_BATCH_WORKERS` (default 1 = sequential). >1 dùng `ThreadPoolExecutor` overlap DNS/SSL I/O; model inference vẫn serialize qua `_inference_lock` nên CPU-bound forward không overlap.
 - **`analysis_quality`**: `"full"` (HTML parse thành công) hoặc `"limited"` (không HTML / parse fail) + `analysis_reason`. Frontend hiển thị badge "Limited Analysis".
 - Response thêm: `model_name`, `ensemble_folds`, `temperature`.
-- **Benchmark**: `python -m src.evaluation.benchmark [n]` → `results/benchmark.json` (p50/p95/p99 ms, throughput/min, RSS delta, timeout rate).
+- **Benchmark**: `python -m src.evaluation.benchmark [n] [--cold]` → `results/benchmark.json` (warm p50/p95/p99 ms, throughput/min, RSS delta, timeout rate, optional cold-start first-prediction ms via `--cold`).
 
 ## Historical Reputation
 `data/cache/reputation.json` stores per-domain scan history (first_seen, last_seen, scans, avg_score, phishing_rate). Updated on every prediction.
