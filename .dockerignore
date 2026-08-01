@@ -1,0 +1,30 @@
+# data/ is bind-mounted at runtime (docker-compose mounts ./data:/app/data),
+# so it must NOT be baked into the image or sent as build context.
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# Git / IDE / OS
+.git/
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Runtime logs
+*.log
+api_err*.txt
+api_log*.txt
+
+# Env files (secrets)
+.env

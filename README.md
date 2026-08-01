@@ -175,6 +175,18 @@ Mọi hoạt động mạng do URL người dùng kích hoạt (DNS, WHOIS, SSL 
 
 > ⚠️ **Cảnh báo deploy:** lớp này là defense-in-depth, không thay thế sandbox mạng. Với môi trường multi-tenant/tin cậy thấp, hãy chạy crawler trong container/VM riêng **không có route vào mạng nội bộ** (xem `docker/Dockerfile.api` + `docker-compose.yml`), đồng thời chặn outbound ở firewall tầng mạng.
 
+### Docker persistence
+
+`docker-compose.yml` mount **toàn bộ** `./data:/app/data` (không chỉ `models` + `processed`), để mọi runtime state tồn tại qua restart container:
+
+- `data/api_keys.json` — key registry (key đã tạo không mất)
+- `data/scan_history.jsonl` — lịch sử scan
+- `data/audit/` — audit log (threat/webhook/whitelist/keys)
+- `data/dynamic_whitelist.json`, `data/known_malicious.json`, `data/webhook_config.json`
+- `data/feedback/`, `data/cache/`
+
+`.dockerignore` loại `data/` khỏi build context (83k HTML, checkpoint hàng GB) — model vẫn được cung cấp qua volume mount. Nếu chạy `docker run` độc lập (không qua compose), hãy mount thủ công `-v ./data:/app/data`.
+
 ## API Production Security
 
 Bảo mật được bật theo môi trường qua biến env (xem `api/config.py`, mẫu trong `.env.example`):

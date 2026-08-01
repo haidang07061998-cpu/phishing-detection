@@ -160,6 +160,9 @@ $env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.benchmark [n]
 docker-compose up --build
 ```
 
+## Docker Runtime State Persistence
+`docker-compose.yml` mounts the ENTIRE `./data:/app/data` (not just models/processed) so runtime state survives container restarts: `api_keys.json`, `scan_history.jsonl`, `audit/`, `dynamic_whitelist.json`, `known_malicious.json`, `webhook_config.json`, `feedback/`, `cache/`. `.dockerignore` excludes `data/` from the build context/image (83k HTML + multi-GB checkpoints) — data is provided via the volume mount at runtime. Standalone `docker run` must add `-v ./data:/app/data`.
+
 ## New Modules
 - **explainability/** - SHAP DeepExplainer for TabTransformer models
 - **brand_detection/** - Brand impersonation detection via URL + text matching
