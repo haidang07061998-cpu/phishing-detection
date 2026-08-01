@@ -39,6 +39,7 @@ FINDING_TEMPLATES = {
     "risky_asn": "Hosted on {desc} — common among phishing campaigns",
     "engine_consensus": "{n} of {total} analysis engines agree: {verdict}",
     "engine_split": "Engines disagree: {ai}, {dns}, {url}, {brand}",
+    "known_threat": "URL/hostname is listed in the known-threat database (source: {source}) — previously reported as phishing",
 }
 
 
@@ -113,6 +114,14 @@ def generate_explanation(result: dict) -> dict:
             brands=", ".join(brands[:3])
         ))
         score_contributors.append(f"Brand impersonation ({', '.join(brands[:2])})")
+
+    # Known-threat database hit (strong signal)
+    threat_match = result.get("threat_match")
+    if threat_match and threat_match.get("matched"):
+        findings.append(FINDING_TEMPLATES["known_threat"].format(
+            source=threat_match.get("source") or threat_match.get("layer", "unknown")
+        ))
+        score_contributors.append("Known-threat database match")
 
     # Subdomain note
     if sub_info:

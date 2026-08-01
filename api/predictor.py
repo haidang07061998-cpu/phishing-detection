@@ -466,9 +466,14 @@ class PhishingPredictor:
         brand_info = get_brand_risk_score(effective_url, clean_text)
         dom_signals = self._extract_dom_signals(dom_vec)
 
+        # Known-threat database (local blocklist + optional community feed)
+        from api.threat_db import match_threat
+        threat_match = match_threat(effective_url)
+
         # Multi-engine analysis (reputation/whitelist is a soft 5th engine)
         from api.engines import (ai_engine, dns_infra_engine, url_pattern_engine,
-                                 brand_engine, reputation_engine, combine_engines)
+                                 brand_engine, reputation_engine, threat_db_engine,
+                                 combine_engines)
 
         tab_features = self._get_feature_summary(tab_vec)
         ai_result = ai_engine(prob_val, tab_features, feature_importance, dns_whois, ssl_redirect)
@@ -477,12 +482,14 @@ class PhishingPredictor:
         br_result = brand_engine(effective_url, clean_text, brand_info)
         domain_status = _get_domain_status(effective_url, reg_domain) if reg_domain else {}
         rep_result = reputation_engine(domain_status)
+        threat_result = threat_db_engine(threat_match)
         combined = combine_engines({
             "ai_model": ai_result,
             "dns_infrastructure": dns_result,
             "url_pattern": url_result,
             "brand": br_result,
             "reputation": rep_result,
+            "threat_db": threat_result,
         })
         final_prob = combined["final_score"] / 100.0
 
@@ -521,6 +528,7 @@ class PhishingPredictor:
             "engine_results": combined,
             "aggregate_score": combined["final_score"],
             "engine_count": len(combined["engines"]),
+            "threat_match": threat_match,
             "reputation": reputation if reputation else {},
             "subdomain_info": subdomain_info,
         }

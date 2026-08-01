@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import UrlInput from './components/UrlInput'
 import ResultCard from './components/ResultCard'
+import ReportsPanel from './components/ReportsPanel'
 import { useTheme } from './ThemeContext'
 import { getApiUrl, apiFetch, friendlyError } from './api'
 
@@ -130,6 +131,8 @@ function App() {
     },
   }
 
+  const isReportTab = activeTab === 'reports'
+
   const handlePredict = async (inputValue, htmlContent) => {
     setLoading(true)
     setError(null)
@@ -193,7 +196,7 @@ function App() {
               </span>
             </div>
             <div className="hdr-tabs" style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-tab)', borderRadius: '8px', padding: '2px' }}>
-              {['url', 'domain', 'ip address'].map(tab => (
+              {['url', 'domain', 'ip address', 'reports'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -254,7 +257,8 @@ function App() {
         }}>
           {activeTab === 'url' ? 'Analyze suspicious URLs' :
            activeTab === 'domain' ? 'Domain Intelligence Lookup' :
-           'IP Address Reputation'}
+           activeTab === 'ip address' ? 'IP Address Reputation' :
+           'Security Reports'}
         </h1>
         <p style={{
           color: 'var(--text-secondary)',
@@ -264,9 +268,13 @@ function App() {
         }}>
           {activeTab === 'url' ? 'Powered by Gated Fusion AI \u00B7 TabTransformer + ModernBERT + DOM Analysis' :
            activeTab === 'domain' ? 'DNS records \u00B7 WHOIS data \u00B7 SSL certificate info' :
-           'Reverse DNS \u00B7 WHOIS lookup \u00B7 Network intelligence'}
+           activeTab === 'ip address' ? 'Reverse DNS \u00B7 WHOIS lookup \u00B7 Network intelligence' :
+           'Scan history \u00B7 threat database \u00B7 data export'}
         </p>
 
+        {isReportTab ? (
+          <ReportsPanel />
+        ) : (<>
         <UrlInput onPredict={handlePredict} loading={loading} activeTab={activeTab} />
 
         {loading && (
@@ -325,6 +333,7 @@ function App() {
             </div>
           </div>
         )}
+        </>)}
       </main>
 
       {/* Stats Footer */}

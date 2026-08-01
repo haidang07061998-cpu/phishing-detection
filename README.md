@@ -70,6 +70,10 @@ cd frontend && npm run dev
 | GET | `/feedback/stats` | Feedback statistics |
 | GET/POST/DELETE | `/webhook` | Webhook config for SIEM/SOAR |
 | GET/POST/DELETE | `/whitelist` | Manage known-reputable domain list (admin-only, TTL, audited) |
+| GET/POST/DELETE | `/threat` | Known-threat database: list / add / remove blocklist entries (admin-only, audited) |
+| GET | `/history` | Scan history + summary counts |
+| GET | `/history/export?format=csv|json` | Export full scan history |
+| GET/POST/DELETE | `/keys` | API key registry management (admin-only) |
 
 ### /predict Response
 
@@ -185,15 +189,19 @@ Bảo mật được bật theo môi trường qua biến env (xem `api/config.p
 | `PHISHGUARD_WEBHOOK_ALLOWLIST` | rỗng (webhook tắt) | Allowlist hostname cho webhook; rỗng → webhook bị vô hiệu |
 | `PHISHGUARD_WEBHOOK_SECRET` | rỗng | HMAC-SHA256 signing key cho payload gửi webhook |
 | `PHISHGUARD_WEBHOOK_TIMEOUT` / `_RETRIES` | 10s / 3 | Timeout và số lần retry (backoff 2^n) |
+| `PHISHGUARD_THREAT_FEED_URL` | rỗng (feed tắt) | Community threat feed URL (PhishTank CSV / OpenPhish / line-list) |
+| `PHISHGUARD_THREAT_FEED_REFRESH_HOURS` | 24 | Chu kỳ re-fetch feed (giờ) |
 
 Các điểm đã xử lý:
 - **CORS hạn chế** origin theo allowlist (không còn `CORS(app)` mặc định cho phép mọi origin).
 - **API key auth** trên `/predict`, `/predict/batch`, `/domain`, `/ip`, `/feedback`, `/explain`, `/webhook`, `/whitelist` (POST/DELETE). Khi không đặt `API_KEYS`, app chạy chế độ dev không auth.
+- **Key registry** (`data/api_keys.json`): SHA-256 hash secret, scopes `admin`/`scan`/`feedback`/`reports`, expiry + IP allowlist, plaintext secret trả 1 lần khi tạo, audit `data/audit/api_keys.jsonl`. Auth là no-op chỉ khi auth tắt VÀ registry rỗng; scope check → 403, key sai → 401.
 - **Rate limiting** theo IP (in-memory sliding window; ghi chú: reset khi restart, không chia sẻ giữa multi-worker gunicorn — cần Redis nếu scale).
 - **Giới hạn payload**: Flask `MAX_CONTENT_LENGTH` + HTML size cap riêng.
 - **Không lộ `str(e)`**: error handler trả `Internal server error.` chung, log traceback đầy đủ server-side.
 - **`/feedback` validate chặt**: feedback_type hợp lệ, url/verdict/comment giới hạn độ dài, score phải là số trong [-1,100], metadata là object ≤ 8 KiB.
 - **`/whitelist`**: validate định dạng domain + cần API key.
+- **`/threat`** (Known-Threat DB): local admin blocklist `data/known_malicious.json` + community feed tùy chọn; add/remove đều audit tại `data/audit/threat.jsonl`; hit là tín hiệu mạnh (weight 2) trong multi-engine vote, không phải hard verdict.
 - **Webhook**: URL phải pass safety policy + host trong allowlist, payload ký HMAC-SHA256 (`X-PhishGuard-Signature`), dispatch bất đồng bộ có timeout, retry backoff, audit log tại `data/audit/webhooks.jsonl`.
 
 > ⚠️ **Ghi chú**: rate limiter dùng bộ nhớ trong — phù hợp single-process/single-worker. Khi chạy gunicorn nhiều worker, mỗi worker có bucket riêng; để chính xác tuyệt đối cần nguồn chia sẻ (Redis).

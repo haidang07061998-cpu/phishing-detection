@@ -4,14 +4,18 @@
 ```
 phishing-detection/
 ├── api/                    # Flask API
-│   ├── app.py              # Flask routes (health, predict, predict/batch, domain, ip, feedback, webhook, whitelist)
+│   ├── app.py              # Flask routes (health, predict, predict/batch, domain, ip, feedback, webhook, whitelist, threat, keys, history)
 │   ├── predictor.py        # PhishingPredictor: loads checkpoint + runs inference + temperature scaling + reputation + BERT quantization
-│   ├── engines.py          # Multi-engine analysis: AI Model, DNS Infra, URL Pattern, Brand
+│   ├── engines.py          # Multi-engine analysis: AI Model, DNS Infra, URL Pattern, Brand, Known-Threat DB
 │   ├── explainer.py        # Natural language explanation generator (template-based, no LLM API needed)
 │   ├── reputation.py       # Thread-safe reputation storage (JSON cache with threading.Lock)
 │   ├── feedback.py         # Feedback loop: FP/FN reporting to data/feedback/*.jsonl
 │   ├── webhooks.py         # Webhook config + dispatch to external SIEM/SOAR
 │   ├── whitelist.py        # Reputation whitelist: known-reputable signal (TTL, audit, revoke), NOT a verdict override
+│   ├── threat_db.py        # Known-threat database: admin blocklist (data/known_malicious.json) + optional community feed + audit
+│   ├── history.py          # Scan history store (data/scan_history.jsonl) + summary + CSV/JSON export
+│   ├── security.py         # API-key auth (env + registry), per-IP rate limiting, payload size guard
+│   ├── config.py           # env-driven config (API keys, CORS, limits, webhooks, threat feed)
 │   └── requirements.txt    # Python dependencies
 ├── data/
 │   ├── raw/                # Immutable source data
@@ -170,9 +174,23 @@ docker-compose up --build
 - **DNS Infrastructure** (weight 2): DNS records, SSL, domain age
 - **URL Pattern** (weight 2): URL features, TLD, keywords, entropy
 - **Brand Impersonation** (weight 1): Brand name detection
+- **Known-Threat DB** (weight 2, active only when URL/domain matches a blocklist entry): local admin blocklist `data/known_malicious.json` + optional community feed (`PHISHGUARD_THREAT_FEED_URL`), audited in `data/audit/threat.jsonl`. A hit is a strong signal, never a hard verdict.
 - **Reputation** (weight 1, active only when domain is known reputable): whitelist signal, only lowers score
 
 `combine_engines()` returns `final_score` (0-100), `final_verdict`, and per-engine details. `reputation_engine()` returns `None` when the domain is not known reputable, so the engine stays out of the weighted vote for unknown domains.
+
+## Scan History & Reports
+`api/history.py` appends a row to `data/scan_history.jsonl` on every predict/domain/ip scan (capped at `MAX_RECORDS = 20000`).
+- `GET /history` → recent records + summary counts (total, verdicts, threat_db_hits)
+- `GET /history/export?format=csv|json` → full export
+- `GET /threat` → blocklist entries (local + community), `POST /threat` → add, `DELETE /threat` → remove (admin scope)
+- Frontend `Reports` tab (`ReportsPanel.jsx`) shows summary cards, filterable history table, JSON/CSV export (via authenticated fetch + blob download), and blocklist add/remove.
+
+## API Key Management
+`api/security.py` supports two key sources:
+- **Env keys** (`PHISHGUARD_API_KEYS`) — legacy, always granted full `admin` scope.
+- **Registry keys** (`data/api_keys.json`, SHA-256 hashed secrets) — managed via `/keys` endpoints with scopes `admin`/`scan`/`feedback`/`reports`, optional expiry + IP allowlist. Plaintext secret returned once at creation.
+- Auth is a no-op only when auth is disabled AND the registry is empty. Scope checks return 403; missing/invalid keys return 401.
 
 ## Temperature Scaling
 `DEFAULT_TEMPERATURE = 2.8` in `predictor.py`. Precedence: `PHISHGUARD_TEMPERATURE` env → `data/models/temperature.json` (tạo bởi `src/evaluation/calibrate.py`) → default 2.8. Applied to logits before sigmoid: `logits /= self.temperature`.

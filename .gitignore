@@ -22,6 +22,9 @@ data/models/fold_results.pkl
 # Runtime state (regenerated automatically)
 data/dynamic_whitelist.json
 data/webhook_config.json
+data/api_keys.json
+data/known_malicious.json
+data/scan_history.jsonl
 data/audit/
 data/feedback/*.jsonl
 

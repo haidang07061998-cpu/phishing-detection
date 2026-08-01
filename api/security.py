@@ -10,18 +10,175 @@ Both are implemented as decorators so individual routes can opt in:
 
 Ordering matters: ``@rate_limit`` must wrap ``@require_api_key`` so the
 rate limiter runs first and unauthenticated floods are throttled before the
-auth check. When auth is disabled (no ``API_KEYS`` configured) the decorators
-are no-ops, preserving dev mode behaviour.
+auth check. When auth is disabled (no keys configured) the decorators are
+no-ops, preserving dev mode behaviour.
+
+Multi-user key management
+-------------------------
+Keys come from two sources:
+
+- **Env keys** (``PHISHGUARD_API_KEYS``) — legacy admin keys, always granted
+  the full ``admin`` scope. Convenient for self-hosting/deployment.
+- **Registry keys** (``data/api_keys.json``) — managed at runtime via the
+  ``/keys`` admin endpoints. Each key stores a SHA-256 hash of the secret, a
+  human name, an optional expiry timestamp, an optional IP allowlist, and the
+  set of scopes it can access. The plaintext secret is returned only once at
+  creation time.
+
+Scopes: ``admin`` (manage keys, whitelist, threats), ``scan`` (predict /
+domain / ip), ``feedback``, ``reports``.
 """
 
+import hashlib
+import json
+import secrets
 import threading
 import time
 from collections import defaultdict, deque
 from functools import wraps
+from pathlib import Path
 
 from flask import jsonify, request
 
 from api import config
+
+# --------------------------------------------------------------------------
+# Key registry
+# --------------------------------------------------------------------------
+
+KEY_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "data" / "api_keys.json"
+KEY_AUDIT_PATH = Path(__file__).resolve().parents[1] / "data" / "audit" / "api_keys.jsonl"
+_key_lock = threading.RLock()
+
+SCOPES = ("admin", "scan", "feedback", "reports")
+DEFAULT_SCOPES = ("scan", "feedback", "reports")
+
+
+def _registry() -> dict:
+    """Return {key_id: {name, key_hash, scopes, expires_at, ip_allowlist, created_at}}."""
+    if not KEY_REGISTRY_PATH.exists():
+        return {}
+    try:
+        data = json.loads(KEY_REGISTRY_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_registry(reg: dict) -> None:
+    KEY_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    KEY_REGISTRY_PATH.write_text(json.dumps(reg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _audit_key(action: str, key_id: str, **extra) -> None:
+    try:
+        KEY_AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        entry = {"ts": time.time(), "action": action, "key_id": key_id, **extra}
+        with open(KEY_AUDIT_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def create_api_key(name: str, scopes=None, expires_at: float | None = None,
+                   ip_allowlist: list[str] | None = None, created_by: str = "admin") -> dict:
+    """Create a registry API key. Returns the plaintext secret ONCE."""
+    name = (name or "unnamed").strip()[:64]
+    valid_scopes = set(scopes or DEFAULT_SCOPES) & set(SCOPES)
+    if not valid_scopes:
+        valid_scopes = set(DEFAULT_SCOPES)
+    if ip_allowlist:
+        ip_allowlist = [ip.strip() for ip in ip_allowlist if ip.strip()]
+    key_id = "key_" + secrets.token_hex(4)
+    secret = secrets.token_urlsafe(24)
+    with _key_lock:
+        reg = _registry()
+        reg[key_id] = {
+            "name": name,
+            "key_hash": hashlib.sha256(secret.encode()).hexdigest(),
+            "scopes": sorted(valid_scopes),
+            "expires_at": float(expires_at) if expires_at else None,
+            "ip_allowlist": ip_allowlist or [],
+            "created_at": time.time(),
+            "created_by": created_by,
+        }
+        _save_registry(reg)
+    _audit_key("create", key_id, name=name, scopes=sorted(valid_scopes), created_by=created_by)
+    return {"status": "ok", "key_id": key_id, "api_key": secret, "name": name,
+            "scopes": sorted(valid_scopes), "expires_at": reg[key_id]["expires_at"]}
+
+
+def revoke_api_key(key_id: str, revoked_by: str = "admin") -> dict:
+    key_id = key_id.strip()
+    with _key_lock:
+        reg = _registry()
+        existed = reg.pop(key_id, None)
+        if existed:
+            _save_registry(reg)
+    if existed:
+        _audit_key("revoke", key_id, revoked_by=revoked_by)
+    return {"status": "ok", "key_id": key_id, "existed": bool(existed)}
+
+
+def list_api_keys() -> dict:
+    reg = _registry()
+    now = time.time()
+    keys = []
+    for key_id, k in reg.items():
+        expires = k.get("expires_at")
+        keys.append({
+            "key_id": key_id,
+            "name": k.get("name", ""),
+            "scopes": k.get("scopes", []),
+            "expires_at": expires,
+            "expired": bool(expires and expires <= now),
+            "ip_allowlist": k.get("ip_allowlist", []),
+            "created_at": k.get("created_at"),
+            "created_by": k.get("created_by", ""),
+        })
+    return {
+        "env_keys": sorted(config.API_KEYS),
+        "env_auth_enabled": config.AUTH_ENABLED,
+        "registry_count": len(keys),
+        "keys": keys,
+    }
+
+
+def _hash_key(secret: str) -> str:
+    return hashlib.sha256(secret.encode()).hexdigest()
+
+
+def _lookup_registry(secret: str) -> dict | None:
+    """Return registry entry matching the secret hash, else None."""
+    digest = _hash_key(secret)
+    with _key_lock:
+        for key_id, k in _registry().items():
+            if k.get("key_hash") == digest:
+                return {**k, "key_id": key_id}
+    return None
+
+
+def _key_is_valid(secret: str) -> dict | None:
+    """Resolve a presented secret to its effective capabilities.
+
+    Env keys get full admin scope. Registry keys must not be expired and must
+    originate from an allowed IP. Returns {key_id, scopes, source, ip} or None.
+    """
+    if secret in config.API_KEYS:
+        return {"key_id": None, "name": "env", "scopes": {"admin"},
+                "source": "env", "ip": _client_ip()}
+    entry = _lookup_registry(secret)
+    if not entry:
+        return None
+    expires = entry.get("expires_at")
+    if expires and float(expires) <= time.time():
+        return None
+    allowlist = entry.get("ip_allowlist") or []
+    if allowlist and _client_ip() not in allowlist:
+        return None
+    return {"key_id": entry.get("key_id"), "name": entry.get("name", ""),
+            "scopes": set(entry.get("scopes") or []),
+            "source": "registry", "ip": _client_ip()}
 
 # --------------------------------------------------------------------------
 # Rate limiting (in-memory sliding window, thread-safe)
@@ -90,17 +247,27 @@ def rate_limit(minute: int | None = None, hour: int | None = None):
 API_KEY_HEADER = "X-API-Key"
 
 
-def require_api_key(fn):
-    """Decorator requiring a valid ``X-API-Key`` header (no-op when auth disabled)."""
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if not config.AUTH_ENABLED:
-            return fn(*args, **kwargs)
-        key = request.headers.get(API_KEY_HEADER, "")
-        if key not in config.API_KEYS:
-            return jsonify({"error": "Missing or invalid API key."}), 401
-        return fn(*args, **kwargs)
-    return wrapper
+def require_api_key(fn=None, *, scope: str | None = None):
+    """Decorator requiring a valid ``X-API-Key`` header (no-op when auth disabled).
+
+    When ``scope`` is given, the key must be an env admin key OR include the
+    requested scope in its registry scopes.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not config.AUTH_ENABLED and not _registry():
+                return func(*args, **kwargs)
+            key = request.headers.get(API_KEY_HEADER, "")
+            effective = _key_is_valid(key)
+            if effective is None:
+                return jsonify({"error": "Missing or invalid API key."}), 401
+            if scope and "admin" not in effective["scopes"] and scope not in effective["scopes"]:
+                return jsonify({"error": f"This API key lacks the '{scope}' scope."}), 403
+            request.api_key = effective
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator if fn is None else decorator(fn)
 
 
 # --------------------------------------------------------------------------

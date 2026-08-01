@@ -145,6 +145,20 @@ def predict():
             "aggregate_score": result.get("aggregate_score"),
             "verdict": "phishing" if result.get("aggregate_score", 0) >= 60 else "suspicious" if result.get("aggregate_score", 0) >= 30 else "safe",
         })
+        from api.history import append_scan
+        append_scan({
+            "timestamp": result.get("timestamp"),
+            "type": "url",
+            "target": url,
+            "url": url,
+            "aggregate_score": result.get("aggregate_score"),
+            "verdict": "phishing" if result.get("aggregate_score", 0) >= 60 else "suspicious" if result.get("aggregate_score", 0) >= 30 else "safe",
+            "phishing_probability": result.get("phishing_probability"),
+            "threat_match": result.get("threat_match"),
+            "engine_count": result.get("engine_count"),
+            "analysis_quality": result.get("analysis_quality"),
+            "whitelisted": result.get("whitelisted"),
+        })
         return jsonify(result)
     except Exception as e:
         _logger.error("predict failed for %r: %s", url, traceback.format_exc())
@@ -217,6 +231,15 @@ def domain_lookup():
 
     try:
         result = predictor.lookup_domain(domain)
+        from api.history import append_scan
+        append_scan({
+            "timestamp": result.get("timestamp"),
+            "type": "domain",
+            "target": domain,
+            "aggregate_score": result.get("aggregate_score"),
+            "verdict": "phishing" if result.get("aggregate_score", 0) >= 60 else "suspicious" if result.get("aggregate_score", 0) >= 30 else "safe",
+            "engine_count": result.get("engine_count"),
+        })
         return jsonify(result)
     except Exception as e:
         _logger.error("domain lookup failed for %r: %s", domain, traceback.format_exc())
@@ -238,6 +261,15 @@ def ip_lookup():
 
     try:
         result = predictor.lookup_ip(ip)
+        from api.history import append_scan
+        append_scan({
+            "timestamp": result.get("timestamp"),
+            "type": "ip",
+            "target": ip,
+            "aggregate_score": result.get("aggregate_score"),
+            "verdict": "phishing" if result.get("aggregate_score", 0) >= 60 else "suspicious" if result.get("aggregate_score", 0) >= 30 else "safe",
+            "engine_count": result.get("engine_count"),
+        })
         return jsonify(result)
     except Exception as e:
         _logger.error("ip lookup failed for %r: %s", ip, traceback.format_exc())
@@ -312,6 +344,86 @@ def whitelist_add():
     return jsonify(result)
 
 
+@app.route("/keys", methods=["GET"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key(scope="admin")
+def keys_list():
+    from api.security import list_api_keys
+    return jsonify(list_api_keys())
+
+
+@app.route("/keys", methods=["POST"])
+@require_api_key(scope="admin")
+def keys_create():
+    from api.security import create_api_key, SCOPES
+    data = request.get_json(force=True) or {}
+    scopes = data.get("scopes") or None
+    if scopes is not None:
+        if not isinstance(scopes, list) or not all(s in SCOPES for s in scopes):
+            return jsonify({"error": f"scopes must be a subset of {list(SCOPES)}"}), 400
+    expires = data.get("expires_at")
+    try:
+        expires = float(expires) if expires is not None else None
+    except (TypeError, ValueError):
+        return jsonify({"error": "expires_at must be a Unix timestamp"}), 400
+    result = create_api_key(
+        name=data.get("name", "unnamed"),
+        scopes=scopes,
+        expires_at=expires,
+        ip_allowlist=data.get("ip_allowlist"),
+        created_by=(getattr(request, "api_key", {}) or {}).get("name", "admin"),
+    )
+    return jsonify(result)
+
+
+@app.route("/keys", methods=["DELETE"])
+@require_api_key(scope="admin")
+def keys_revoke():
+    from api.security import revoke_api_key
+    data = request.get_json(force=True) or {}
+    if not data or "key_id" not in data:
+        return jsonify({"error": "Missing 'key_id' in request body"}), 400
+    return jsonify(revoke_api_key(data["key_id"], revoked_by=(getattr(request, "api_key", {}) or {}).get("name", "admin")))
+
+
+@app.route("/threat", methods=["GET"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+def threat_get():
+    from api.threat_db import get_all, refresh_feed
+    force = request.args.get("refresh", "0") == "1"
+    if force:
+        refresh_feed(force=True)
+    return jsonify(get_all())
+
+
+@app.route("/threat", methods=["POST"])
+@require_api_key
+def threat_add():
+    from api.threat_db import add_entry
+    data = request.get_json(force=True)
+    if not data or "value" not in data:
+        return jsonify({"error": "Missing 'value' in request body"}), 400
+    result = add_entry(
+        value=data["value"],
+        added_by=data.get("added_by", "admin"),
+        source=data.get("source", "manual"),
+        notes=data.get("notes", ""),
+    )
+    if result.get("status") == "error":
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route("/threat", methods=["DELETE"])
+@require_api_key
+def threat_remove():
+    from api.threat_db import remove_entry
+    data = request.get_json(force=True)
+    if not data or "value" not in data:
+        return jsonify({"error": "Missing 'value' in request body"}), 400
+    return jsonify(remove_entry(value=data["value"], removed_by=data.get("removed_by", "admin")))
+
+
 @app.route("/whitelist", methods=["DELETE"])
 @require_api_key
 def whitelist_remove():
@@ -323,6 +435,37 @@ def whitelist_remove():
     if err:
         return jsonify({"error": err}), 400
     return jsonify(_remove_whitelist(domain, removed_by=data.get("removed_by", "admin")))
+
+
+@app.route("/history", methods=["GET"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key(scope="reports")
+def history():
+    from api.history import list_history, summary
+    limit = request.args.get("limit", 50)
+    offset = request.args.get("offset", 0)
+    verdict = request.args.get("verdict")
+    target = request.args.get("target")
+    data = list_history(limit=limit, offset=offset, verdict=verdict, target=target)
+    data["summary"] = summary()
+    return jsonify(data)
+
+
+@app.route("/history/export", methods=["GET"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key(scope="reports")
+def history_export():
+    from api.history import export_history
+    fmt = request.args.get("format", "json").lower()
+    if fmt not in ("json", "csv"):
+        return jsonify({"error": "format must be 'json' or 'csv'"}), 400
+    content, mime = export_history(fmt)
+    from flask import Response
+    return Response(
+        content,
+        mimetype=mime,
+        headers={"Content-Disposition": f"attachment; filename=scan_history.{fmt}"},
+    )
 
 
 @app.route("/explain", methods=["POST"])

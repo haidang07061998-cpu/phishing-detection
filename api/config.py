@@ -77,3 +77,12 @@ ENSEMBLE_FOLDS = int(os.environ.get("PHISHGUARD_ENSEMBLE_FOLDS", "1"))
 COMPUTE_IMPORTANCE = os.environ.get("PHISHGUARD_COMPUTE_IMPORTANCE", "1").strip().lower() in ("1", "true", "yes", "on")
 EXTRACT_CACHE_TTL = float(os.environ.get("PHISHGUARD_EXTRACT_CACHE_TTL", "300"))
 BATCH_WORKERS = int(os.environ.get("PHISHGUARD_BATCH_WORKERS", "1"))
+
+# --------------------------------------------------------------------------
+# Known-threat database (blocklist)
+# --------------------------------------------------------------------------
+
+# Optional community feed URL (PhishTank CSV / OpenPhish / plain list). Empty
+# disables the feed and keeps the system fully self-contained.
+THREAT_FEED_URL = os.environ.get("PHISHGUARD_THREAT_FEED_URL", "")
+THREAT_FEED_REFRESH_HOURS = float(os.environ.get("PHISHGUARD_THREAT_FEED_REFRESH_HOURS", "24"))

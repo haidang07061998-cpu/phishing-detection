@@ -311,12 +311,32 @@ def reputation_engine(domain_status: dict) -> dict | None:
     }
 
 
+def threat_db_engine(threat_match: dict | None) -> dict | None:
+    """Known-threat database signal.
+
+    Returns None when no match (engine inactive). When the URL/hostname is
+    found in the local blocklist or an enabled community feed, this is a strong
+    (but not absolute) phishing signal. The match details are surfaced to the
+    UI and the weight keeps it from being an outright veto.
+    """
+    if not threat_match or not threat_match.get("matched"):
+        return None
+    layer = threat_match.get("layer", "local")
+    source = threat_match.get("source") or layer
+    return {
+        "score": 90,
+        "verdict": "phishing",
+        "details": f"URL/hostname found in known-threat database ({source})",
+    }
+
+
 ENGINE_WEIGHTS = {
     "ai_model": 4,
     "dns_infrastructure": 2,
     "url_pattern": 2,
     "brand": 1,
     "reputation": 1,
+    "threat_db": 2,
 }
 
 
