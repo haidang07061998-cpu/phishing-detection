@@ -41,6 +41,18 @@ MAX_BATCH_SIZE = 50
 _logger = logging.getLogger(__name__)
 
 
+def _actor() -> str:
+    """Return the authenticated caller's identity for audit logs.
+
+    Derived ONLY from the verified API key (set by require_api_key), never from
+    request body fields — clients cannot impersonate another operator.
+    """
+    k = getattr(request, "api_key", {}) or {}
+    name = k.get("name") or "unknown"
+    kid = k.get("key_id")
+    return f"{name} [{kid}]" if kid else name
+
+
 @app.errorhandler(413)
 def _payload_too_large(_e):
     return jsonify({"error": f"Request body too large (max {config.MAX_JSON_BYTES} bytes)."}), 413
@@ -142,6 +154,8 @@ def predict():
     data = request.get_json(force=True)
     if not data or "url" not in data:
         return jsonify({"error": "Missing 'url' in request body"}), 400
+    if not isinstance(data["url"], str):
+        return jsonify({"error": "'url' must be a string"}), 400
 
     url = data["url"].strip()
     err = validate_url(url)
@@ -195,6 +209,8 @@ def predict_batch():
         return jsonify({"error": "'urls' must be a non-empty list"}), 400
     if len(urls) > MAX_BATCH_SIZE:
         return jsonify({"error": f"Batch size cannot exceed {MAX_BATCH_SIZE}"}), 400
+    if not all(isinstance(u, str) for u in urls):
+        return jsonify({"error": "Each entry in 'urls' must be a string"}), 400
 
     results = []
     urls = [u.strip() for u in urls]
@@ -240,6 +256,8 @@ def domain_lookup():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
         return jsonify({"error": "Missing 'domain' in request body"}), 400
+    if not isinstance(data["domain"], str):
+        return jsonify({"error": "'domain' must be a string"}), 400
 
     domain = data["domain"].strip().lower()
     err = validate_domain(domain)
@@ -271,6 +289,8 @@ def ip_lookup():
     data = request.get_json(force=True)
     if not data or "ip" not in data:
         return jsonify({"error": "Missing 'ip' in request body"}), 400
+    if not isinstance(data["ip"], str):
+        return jsonify({"error": "'ip' must be a string"}), 400
 
     ip = data["ip"].strip()
     err = validate_ip(ip)
@@ -302,6 +322,8 @@ def feedback():
     data = request.get_json(force=True)
     if not data or "url" not in data or "feedback_type" not in data:
         return jsonify({"error": "Missing 'url' and 'feedback_type' in request body"}), 400
+    if not isinstance(data["url"], str) or not isinstance(data["feedback_type"], str):
+        return jsonify({"error": "'url' and 'feedback_type' must be strings"}), 400
     result = submit_feedback(
         url=data["url"],
         feedback_type=data["feedback_type"],
@@ -356,13 +378,15 @@ def whitelist_add():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
         return jsonify({"error": "Missing 'domain' in request body"}), 400
+    if not isinstance(data["domain"], str):
+        return jsonify({"error": "'domain' must be a string"}), 400
     domain = data["domain"].strip().lower()
     err = validate_domain(domain)
     if err:
         return jsonify({"error": err}), 400
     result = _add_whitelist(
         domain,
-        added_by=data.get("added_by", "admin"),
+        added_by=_actor(),
         ttl_days=data.get("ttl_days", 30),
         reason=data.get("reason", ""),
     )
@@ -396,7 +420,7 @@ def keys_create():
         scopes=scopes,
         expires_at=expires,
         ip_allowlist=data.get("ip_allowlist"),
-        created_by=(getattr(request, "api_key", {}) or {}).get("name", "admin"),
+        created_by=_actor(),
     )
     return jsonify(result)
 
@@ -408,7 +432,7 @@ def keys_revoke():
     data = request.get_json(force=True) or {}
     if not data or "key_id" not in data:
         return jsonify({"error": "Missing 'key_id' in request body"}), 400
-    return jsonify(revoke_api_key(data["key_id"], revoked_by=(getattr(request, "api_key", {}) or {}).get("name", "admin")))
+    return jsonify(revoke_api_key(data["key_id"], revoked_by=_actor()))
 
 
 @app.route("/threat", methods=["GET"])
@@ -428,9 +452,11 @@ def threat_add():
     data = request.get_json(force=True)
     if not data or "value" not in data:
         return jsonify({"error": "Missing 'value' in request body"}), 400
+    if not isinstance(data["value"], str):
+        return jsonify({"error": "'value' must be a string"}), 400
     result = add_entry(
         value=data["value"],
-        added_by=data.get("added_by", "admin"),
+        added_by=_actor(),
         source=data.get("source", "manual"),
         notes=data.get("notes", ""),
     )
@@ -446,7 +472,9 @@ def threat_remove():
     data = request.get_json(force=True)
     if not data or "value" not in data:
         return jsonify({"error": "Missing 'value' in request body"}), 400
-    return jsonify(remove_entry(value=data["value"], removed_by=data.get("removed_by", "admin")))
+    if not isinstance(data["value"], str):
+        return jsonify({"error": "'value' must be a string"}), 400
+    return jsonify(remove_entry(value=data["value"], removed_by=_actor()))
 
 
 @app.route("/whitelist", methods=["DELETE"])
@@ -455,11 +483,13 @@ def whitelist_remove():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
         return jsonify({"error": "Missing 'domain' in request body"}), 400
+    if not isinstance(data["domain"], str):
+        return jsonify({"error": "'domain' must be a string"}), 400
     domain = data["domain"].strip().lower()
     err = validate_domain(domain)
     if err:
         return jsonify({"error": err}), 400
-    return jsonify(_remove_whitelist(domain, removed_by=data.get("removed_by", "admin")))
+    return jsonify(_remove_whitelist(domain, removed_by=_actor()))
 
 
 @app.route("/history", methods=["GET"])
@@ -500,6 +530,8 @@ def explain():
     data = request.get_json(force=True)
     if not data or "question" not in data or "result" not in data:
         return jsonify({"error": "Missing 'question' and 'result' in request body"}), 400
+    if not isinstance(data["question"], str) or not isinstance(data["result"], dict):
+        return jsonify({"error": "'question' must be a string and 'result' must be an object"}), 400
 
     llm_answer = llm_explain(data["result"], data["question"])
     if llm_answer:
