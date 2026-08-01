@@ -129,7 +129,7 @@ Mendeley has only 12 URL features (no DNS/WHOIS/SSL at inference time). **Do NOT
 All models return raw logits from `forward()`. `torch.sigmoid()` is applied only during evaluation and `predict_proba`.
 
 ### Kaggle Proposed Training Config
-1. `N_FOLDS = 3` (baseline1/2 use 5; proposed uses 3 for quota)
+1. `N_FOLDS = 5` (same as baselines — all models use 5-fold CV)
 2. `EP = 8` with early stopping patience=3
 3. Stratified sample `n=50000` (was 20k for faster runs)
 4. Only save `*_best.pt` per fold
@@ -207,7 +207,18 @@ New fields in `/predict` response:
 All training scripts now use `pos_weight` in `BCEWithLogitsLoss`
 
 ## CV note
-3-fold (Proposed) vs 5-fold (Baselines) explained in code docstrings
+All 3 models use 5-fold CV (same split/seed).
+
+## Training/Evaluation Pipeline (leakage-safe, July 2026)
+Data leakage fixes applied to all training scripts + Kaggle notebooks:
+
+- **Held-out 80/20 split** for Baseline 2 & Proposed: `train_test_split(stratify=y, random_state=SEED)`; indices saved to `baseline2_splits.json` / `proposed_splits.json`. The test set is NEVER used during training/CV.
+- **StandardScaler fit per-fold** (Baseline 1 & 2): `scaler = StandardScaler().fit(X[tr_idx])`, then transform both train/test folds. No global `fit_transform`.
+- **Proposed per-fold normalization**: URL/DOM mean+std computed on train fold only, applied via `CachedDataset(full_data, idx, url_mean, url_std, dom_mean, dom_std)`.
+- **`evaluate.py` evaluates each fold model ONLY on its own hold-out fold**: uses `test_indices` from `*_folds.json` and restores scaler params (`_restore_scaler()`) from the saved metadata.
+- **Metadata files**: `baseline1_folds.json`, `baseline2_folds.json`, `proposed_folds.json` (test_indices + scaler mean/scale per fold).
+- **Result JSON keys**: Baseline 2 & Proposed → top-level metrics = **held-out test**, `cv_*` keys = CV-on-train metrics. Baseline 1 → top-level = 5-fold CV (no external test set).
+- Kaggle notebooks must be run in order: baseline1 → baseline2 → proposed → compare. Split logic is duplicated identically across baseline2/proposed notebooks (same SEED + row order) so all models share the same test split.
 
 ## Recent Fixes & Improvements (July 2026)
 
@@ -232,9 +243,15 @@ All training scripts now use `pos_weight` in `BCEWithLogitsLoss`
 - `test_phishing.html` — Manual test file with eval(atob), password form, document.write iframe
 - `test_genuine.html` — Manual test file with clean blog layout
 - `docs/technical_report.md` — Comprehensive 17-section technical document for thesis reference
+- `src/security/url_safety.py` — SSRF/URL-safety layer: blocks private/reserved IP (IPv4+IPv6), internal hostnames (localhost, *.local, *.internal...), resolves DNS and validates real IPs, `safe_get()` checks every redirect hop + caps redirects & response size (2 MiB). Applied to `ssl_redirect_extractor.py`, `dns_whois_extractor.py`, `cloaking_detector.py`, `app.py validate_url`, `webhooks.py set_webhook`.
+- `api/config.py` — env-driven config (API keys, CORS origins, payload limits, rate limits, webhook allowlist/secret). `.env.example` là mẫu.
+- `api/security.py` — `require_api_key` + `rate_limit` decorators, `reject_oversized_html`. Auth tắt khi `PHISHGUARD_API_KEYS` rỗng.
+- `frontend/src/api.js` — API client helper: tự gắn `X-API-Key` từ `VITE_API_KEY`, xử lý lỗi JSON.
 
 ### Project State
 - All 8 fixable bugs/improvements from code review completed.
 - 1 known limitation: static DOM parsing vs dynamic JavaScript — would need Playwright/Puppeteer.
-- F1=0.977, AUC=0.993, multi-engine weighted voting, Ollama AI Copilot.
-- Last commit: `28a4563` (responsive layout). Push history: `9d9c8bc → a44852c → eadd0f3 → 14d0175 → 5a94e60 → 6809aba → 28a4563 → 4dc8774`
+- **Kết quả chính thức (sau fix leakage, train lại trên Kaggle, July 2026):** Baseline 1 (ISCX, 5-fold CV) `Acc=0.9665+-0.0006, Prec=0.8922+-0.0030, Recall=0.9532+-0.0023, F1=0.9217+-0.0013, AUC=0.9925+-0.0007`; Baseline 2 (Mendeley, held-out test) `Acc=0.8719+-0.0015, Prec=0.8864+-0.0028, Recall=0.8531+-0.0020, F1=0.8694+-0.0014, AUC=0.9490+-0.0006`; Proposed (Mendeley, held-out test) `Acc=0.9725+-0.0016, Prec=0.9684+-0.0050, Recall=0.9769+-0.0022, F1=0.9726+-0.0015, AUC=0.9917+-0.0011, FPR=0.0320+-0.0053`. So sánh có nghĩa: **Proposed vs Baseline 2** (cùng dataset + split) → +0.1006 Acc, +0.0819 Prec, +0.1238 Recall, +0.1032 F1, +0.0427 AUC. Các số cũ F1=0.977/AUC=0.993 và bản intermediate (Acc=0.9725/AUC=0.9927/F1=0.9326) **KHÔNG còn dùng**. Artifact mới đã nằm trong `data/models/` (15 checkpoint + evaluation/folds JSON) + `results/figures/` (8 PNG). `evaluation_results.json` đã tạo (gộp 3 eval JSON). File quantized cũ đã xóa — predictor tự regenerate từ checkpoint mới khi khởi động API.
+- Retrain workflow: `kaggle_baseline1.ipynb` → `kaggle_baseline2.ipynb` → `kaggle_proposed.ipynb` → `kaggle_compare.ipynb`. Mỗi notebook train tự sinh biểu đồ (`figures/*_summary.png`) + artifact (`predictions_*.npz`, `training_logs_*.json`, `*_folds.json`, `*_splits.json`, `dataset_stats_*.json`, `evaluation_*.json`).
+- **CẢNH BÁO notebook:** không dùng helper script `.split("\n")` để sửa source cell (mất newline → notebook hỏng). Sửa bằng cách thay source list với từng dòng có `\n` cuối, rồi chạy `nbformat.validate` + `compile()` từng cell.
+- Last commit: `44f8437`

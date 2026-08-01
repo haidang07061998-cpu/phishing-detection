@@ -11,6 +11,7 @@ avoid redundant network queries and rate-limiting.
 
 import json
 import datetime
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -18,6 +19,10 @@ import dns.resolver
 import dns.reversename
 import whois
 from ipwhois import IPWhois
+
+if str(Path(__file__).resolve().parents[2]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.security.url_safety import validate_url
 
 CACHE_PATH = Path(__file__).resolve().parents[2] / "data" / "cache" / "whois_cache.json"
 
@@ -68,6 +73,8 @@ def query_dns(domain: str) -> dict:
         "asn_description": "",
         "asn_country": "",
     }
+    if not _domain_is_safe(domain):
+        return result
     import re
     ips = []
     is_raw_ip = bool(re.match(r"^\d+\.\d+\.\d+\.\d+$", domain))
@@ -120,6 +127,8 @@ def query_whois(domain: str) -> dict:
         "is_privacy_protected": -1,
         "country": "",
     }
+    if not _domain_is_safe(domain):
+        return result
     try:
         w = whois.whois(domain)
         creation = w.creation_date
@@ -143,6 +152,15 @@ def query_whois(domain: str) -> dict:
     return result
 
 
+def _domain_is_safe(domain: str) -> bool:
+    """Return False for internal/private hosts so DNS/WHOIS are never queried."""
+    try:
+        check = validate_url(f"http://{domain}/")
+        return check["valid"]
+    except Exception:
+        return False
+
+
 def extract_dns_whois_features(url: str, use_cache: bool = True) -> dict:
     """
     Extract DNS and WHOIS features for the domain of the given URL.
@@ -156,6 +174,10 @@ def extract_dns_whois_features(url: str, use_cache: bool = True) -> dict:
         ttl, domain_age_days, registrar, is_privacy_protected, country.
     """
     domain = _extract_domain(url)
+
+    # SSRF guard: never query DNS/WHOIS for internal/private hosts.
+    if not _domain_is_safe(domain):
+        return dict(_DNS_DEFAULTS)
 
     if use_cache:
         cache = _load_cache()

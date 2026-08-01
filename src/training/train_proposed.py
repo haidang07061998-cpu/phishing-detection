@@ -1,17 +1,16 @@
 """
-Proposed - TabTransformer + ModernBERT + GatedFusion with 3-fold CV.
+Proposed - TabTransformer + ModernBERT + GatedFusion with 5-fold CV.
 Matches kaggle_proposed.ipynb logic for local training.
 
-3-fold CV rationale: The Proposed model is 10-15x larger than baselines
-(TabTransformer + ModernBERT + GatedFusion), and training on Kaggle free GPUs
-has a 30-hour weekly quota. 3 folds keep each run under ~8 hours, allowing
-iterative development within quota limits.
-
-IMPORTANT comparison disclaimer: Proposed uses 3-fold CV while baselines use
-5-fold CV. Direct comparison of variance/std across models is not meaningful —
-the Proposed model's std is computed from 3 folds vs 5 for baselines.
-Reported mean metrics are still comparable, but the Proposed model's variance
-estimates are less reliable.
+Leakage fixes (July 2026):
+- The fixed 80/20 split in split.json is now RESPECTED: 5-fold CV runs ONLY
+  on split["train_indices"]; the test set is completely held out during training.
+- URL/DOM feature normalization is fitted per-fold on the train fold ONLY
+  (matching kaggle_proposed.ipynb).
+- After CV, each fold's best checkpoint is evaluated on the held-out test set
+  (never seen in any fold), and those test metrics are reported in
+  evaluation_proposed.json. Per-fold train scalers are saved to
+  proposed_folds.json so evaluate.py reproduces the same numbers.
 """
 
 import os, sys, json, gc
@@ -32,10 +31,11 @@ from src.models.full_model import PhishingDetector
 
 PROJECT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT / "data" / "processed" / "mendeley_full"
-MODEL_DIR = PROJECT / "data" / "models"
+DATA_OUT = PROJECT / "data"
+MODEL_DIR = DATA_OUT / "models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-SEED = 42; N_FOLDS = 3
+SEED = 42; N_FOLDS = 5
 torch.manual_seed(SEED); np.random.seed(SEED)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BS = 16; EP = 8
@@ -46,16 +46,27 @@ ACC_STEPS = 2
 
 
 class CachedDataset(Dataset):
-    def __init__(self, records, indices):
+    def __init__(self, records, indices, url_mean=None, url_std=None,
+                 dom_mean=None, dom_std=None):
         self.data = [records[i] for i in indices]
+        self.url_mean = url_mean
+        self.url_std = url_std
+        self.dom_mean = dom_mean
+        self.dom_std = dom_std
     def __len__(self): return len(self.data)
     def __getitem__(self, i):
         r = self.data[i]
+        if self.url_mean is not None:
+            url = (np.array(r['url_features'], dtype=np.float32) - self.url_mean) / self.url_std
+            dom = (np.array(r['dom_features'], dtype=np.float32) - self.dom_mean) / self.dom_std
+        else:
+            url = np.array(r['url_features'], dtype=np.float32)
+            dom = np.array(r['dom_features'], dtype=np.float32)
         return (
-            torch.tensor(r['url_features'], dtype=torch.float32),
+            torch.tensor(url, dtype=torch.float32),
             r['input_ids'],
             r['attention_mask'],
-            torch.tensor(r['dom_features'], dtype=torch.float32),
+            torch.tensor(dom, dtype=torch.float32),
             torch.tensor(r['label'], dtype=torch.float32),
         )
 
@@ -172,18 +183,55 @@ def main():
         })
 
     labels = [d['label'] for d in full_data]
-    indices = np.arange(len(full_data))
-    all_metrics = []
+    train_indices = np.array(split["train_indices"], dtype=np.int64)
+    test_indices = np.array(split["test_indices"], dtype=np.int64)
+    print(f"Train indices: {len(train_indices):,} | Test indices (held-out): {len(test_indices):,}")
+
+    # Dataset statistics (local uses full 80k pre-tokenized data; Kaggle uses 50k sample)
+    lab_arr = np.array(labels, dtype=np.float32)
+    dataset_stats = {
+        'dataset': 'Mendeley 2021 (HTML)',
+        'n_full': len(labels),
+        'n_full_phishing': int((lab_arr == 1).sum()),
+        'n_full_benign': int((lab_arr == 0).sum()),
+        'n_samples': len(labels),
+        'n_phishing': int((lab_arr == 1).sum()),
+        'n_benign': int((lab_arr == 0).sum()),
+        'phishing_ratio': round(float(lab_arr.mean()), 6),
+        'n_features': 12,
+        'feature_keys': ['url_length','domain_length','path_length','entropy',
+                         'special_char_ratio','digit_ratio','subdomain_count','has_https',
+                         'has_ip_address','suspicious_keywords','url_depth','tld_in_path'],
+    }
+    with open(DATA_OUT / 'dataset_stats_proposed.json', 'w') as f:
+        json.dump(dataset_stats, f, indent=2)
+    print("Dataset stats saved to data/dataset_stats_proposed.json")
+
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
-    pos_count = sum(labels); neg_count = len(labels) - pos_count
+    train_labels = [labels[i] for i in train_indices]
+    pos_count = sum(train_labels); neg_count = len(train_labels) - pos_count
     pos_weight = torch.tensor([neg_count / pos_count], device=DEVICE)
     crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     print(f"pos_weight={pos_weight.item():.2f} (neg={neg_count}, pos={int(pos_count)})")
 
-    for fold, (tr_idx, te_idx) in enumerate(skf.split(indices, labels)):
+    all_metrics = []
+    test_metrics = []
+    test_preds = []
+    folds_meta = []
+    history = []
+
+    for fold, (tr_rel, te_rel) in enumerate(skf.split(train_indices, train_labels)):
+        tr_idx = train_indices[tr_rel]
+        te_idx = train_indices[te_rel]
         print(f"\n{'='*58}")
         print(f"  FOLD {fold+1}/{N_FOLDS}  |  train={len(tr_idx)}  val={len(te_idx)}")
         print(f"{'='*58}")
+
+        # Per-fold normalization fitted on the train fold ONLY (no leakage)
+        tr_url_arr = np.array([full_data[i]['url_features'] for i in tr_idx], dtype=np.float32)
+        url_mean, url_std = tr_url_arr.mean(axis=0), tr_url_arr.std(axis=0) + 1e-8
+        tr_dom_arr = np.array([full_data[i]['dom_features'] for i in tr_idx], dtype=np.float32)
+        dom_mean, dom_std = tr_dom_arr.mean(axis=0), tr_dom_arr.std(axis=0) + 1e-8
 
         model = PhishingDetector().to(DEVICE)
         total_p = sum(p.numel() for p in model.parameters())
@@ -191,11 +239,11 @@ def main():
         print(f"Params: total={total_p:,} | trainable={train_p:,}")
 
         tr_ld = DataLoader(
-            CachedDataset(full_data, tr_idx),
+            CachedDataset(full_data, tr_idx, url_mean, url_std, dom_mean, dom_std),
             batch_size=BS, shuffle=True, collate_fn=collate_fn, num_workers=0
         )
         te_ld = DataLoader(
-            CachedDataset(full_data, te_idx),
+            CachedDataset(full_data, te_idx, url_mean, url_std, dom_mean, dom_std),
             batch_size=BS*2, shuffle=False, collate_fn=collate_fn, num_workers=0
         )
 
@@ -216,11 +264,15 @@ def main():
         scaler = torch.amp.GradScaler(enabled=DEVICE.type == 'cuda')
         best_f1, patience_count = 0.0, 0
         best_ckpt = MODEL_DIR / f'proposed_fold{fold+1}_best.pt'
+        hist = []
 
         for ep in range(1, EP + 1):
             tl = train_epoch(model, tr_ld, opt, crit, scaler)
             m, _, _ = evaluate(model, te_ld, crit)
             scheduler.step()
+
+            hist.append({'epoch': ep, 'train_loss': round(float(tl), 5),
+                         'val_auc': round(float(m['auc']), 5), 'val_f1': round(float(m['f1']), 5)})
 
             flag = ''
             if m['f1'] > best_f1:
@@ -241,25 +293,67 @@ def main():
         fm, _, _ = evaluate(model, te_ld, crit)
         fm['fold'] = fold + 1
         all_metrics.append(fm)
-        print(f"  Fold {fold+1} -> Acc={fm['accuracy']:.4f} | AUC={fm['auc']:.4f} | F1={fm['f1']:.4f}")
+        history.append({'fold': fold + 1, 'epochs': hist})
+        print(f"  Fold {fold+1} -> CV   Acc={fm['accuracy']:.4f} | AUC={fm['auc']:.4f} | F1={fm['f1']:.4f}")
 
-        del model, opt, scheduler, scaler, tr_ld, te_ld
+        # Held-out test evaluation using this fold's train scaler (test never seen in CV)
+        test_ld = DataLoader(
+            CachedDataset(full_data, test_indices, url_mean, url_std, dom_mean, dom_std),
+            batch_size=BS*2, shuffle=False, collate_fn=collate_fn, num_workers=0
+        )
+        tm, tp, _ = evaluate(model, test_ld, crit)
+        tm['fold'] = fold + 1
+        test_metrics.append(tm)
+        test_preds.append(tp)
+        print(f"  Fold {fold+1} -> Test Acc={tm['accuracy']:.4f} | AUC={tm['auc']:.4f} | F1={tm['f1']:.4f}")
+
+        folds_meta.append({
+            "fold": int(fold + 1),
+            "url_mean": url_mean.tolist(),
+            "url_std": url_std.tolist(),
+            "dom_mean": dom_mean.tolist(),
+            "dom_std": dom_std.tolist(),
+        })
+
+        del model, opt, scheduler, scaler, tr_ld, te_ld, test_ld
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    with open(MODEL_DIR / 'proposed_folds.json', 'w') as f:
+        json.dump({"n_folds": N_FOLDS, "folds": folds_meta}, f, indent=2)
+    print("Fold metadata saved to proposed_folds.json")
+
+    with open(DATA_OUT / 'training_logs_proposed.json', 'w') as f:
+        json.dump(history, f, indent=2)
+    test_labels_arr = np.array([full_data[i]['label'] for i in test_indices], dtype=np.float32)
+    test_preds_mean = np.mean(np.stack(test_preds), axis=0)
+    tp_obj = np.empty(N_FOLDS, dtype=object)
+    for f in range(N_FOLDS):
+        tp_obj[f] = test_preds[f]
+    np.savez(DATA_OUT / 'predictions_proposed.npz',
+             test_preds_mean=test_preds_mean, test_labels=test_labels_arr, test_preds=tp_obj)
+    print("Training logs + predictions saved to data/")
+
     metric_keys = ['accuracy', 'precision', 'recall', 'f1', 'auc']
     avg = {k: np.mean([m[k] for m in all_metrics]) for k in metric_keys}
     std = {k: np.std([m[k] for m in all_metrics]) for k in metric_keys}
+    test_avg = {k: np.mean([m[k] for m in test_metrics]) for k in metric_keys}
+    test_std = {k: np.std([m[k] for m in test_metrics]) for k in metric_keys}
 
-    print(f"\n>>> {N_FOLDS}-Fold CV:")
+    print(f"\n>>> {N_FOLDS}-Fold CV (train portion):")
     for k in metric_keys:
         print(f"  {k.upper():10s}: {avg[k]:.4f} +/- {std[k]:.4f}")
+    print(f"\n>>> Held-out test (never in CV):")
+    for k in metric_keys:
+        print(f"  {k.upper():10s}: {test_avg[k]:.4f} +/- {test_std[k]:.4f}")
 
     results = {'model': 'TabTransformer + ModernBERT + GatedFusion', 'n_folds': N_FOLDS}
     for k in metric_keys:
-        results[k] = round(float(avg[k]), 6)
-        results[k + '_std'] = round(float(std[k]), 6)
+        results[k] = round(float(test_avg[k]), 6)
+        results[k + '_std'] = round(float(test_std[k]), 6)
+        results['cv_' + k] = round(float(avg[k]), 6)
+        results['cv_' + k + '_std'] = round(float(std[k]), 6)
 
     with open(MODEL_DIR / 'evaluation_proposed.json', 'w') as f:
         json.dump(results, f, indent=2)

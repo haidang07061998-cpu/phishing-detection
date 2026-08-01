@@ -85,16 +85,25 @@ output = W_o × LayerNorm(fused) + b_o
 
 ### Training
 - Dataset: Mendeley 2021 (80k records) + ISCX-URL2016 (36k records)
-- 3-fold cross validation (Proposed), 5-fold (Baselines)
+- 5-fold cross validation (tất cả 3 model, cùng split/seed)
 - BCEWithLogitsLoss + pos_weight cho class imbalance
 - ChainedScheduler: warmup + cosine annealing
 - Gradient clipping 0.5 + AMP (GradScaler)
 - Per-fold feature normalization
 
 ### Performance
-- F1 Score: 0.977
-- AUC: 0.993
+
+Kết quả chính thức (chạy lại trên Kaggle sau fix data leakage, 5-fold CV, cùng split/seed — chi tiết trong `data/models/evaluation_*.json`):
+
+- **Baseline 1** (ISCX, 5-fold CV): Acc=0.9665 ±0.0006, Prec=0.8922 ±0.0030, Recall=0.9532 ±0.0023, F1=0.9217 ±0.0013, AUC=0.9925 ±0.0007
+- **Baseline 2** (Mendeley, held-out test): Acc=0.8719 ±0.0015, Prec=0.8864 ±0.0028, Recall=0.8531 ±0.0020, F1=0.8694 ±0.0014, AUC=0.9490 ±0.0006
+- **Proposed** (Mendeley, held-out test): Acc=0.9725 ±0.0016, Prec=0.9684 ±0.0050, Recall=0.9769 ±0.0022, **F1=0.9726 ±0.0015**, **AUC=0.9917 ±0.0011**
+- So sánh cùng held-out test (Mendeley): **Proposed vs Baseline 2** — +0.1006 Acc, +0.0819 Prec, +0.1238 Recall, +0.1032 F1, +0.0427 AUC
 - Temperature Scaling: T = 2.8
+
+### Ablation reporting (hiện tại)
+- **Baseline 1** (ISCX): báo cáo 5-fold CV (không có test set ngoài).
+- **Baseline 2** & **Proposed** (Mendeley): split 80/20 giống nhau (cùng SEED/row order) → báo cáo **held-out test** (top-level trong `evaluation_*.json`), CV ghi dưới key `cv_*`.
 
 ### Feature Importance
 Gradient-based: ∂(loss)/∂(feature) × feature_value → xếp hạng đóng góp

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getApiHeaders, getApiUrl } from '../api'
 
 const WHITELIST_DOMAINS = [
   'google.com', 'googleapis.com', 'googleusercontent.com',
@@ -1031,13 +1032,12 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
   const verdict = confidence >= 0.6 ? 'phishing' : confidence >= 0.3 ? 'suspicious' : 'safe'
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || '/api'
-    fetch(apiUrl + '/health/llm')
+    const apiUrl = getApiUrl()
+    fetch(apiUrl + '/health/llm', { headers: getApiHeaders() })
       .then(r => r.json())
       .then(d => setLlmStatus(d.available ? 'ai' : 'template'))
       .catch(() => setLlmStatus('template'))
   }, [])
-
   const templateAnswers = [
     exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${verdict} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
     exp.key_findings?.length ? exp.key_findings.map((f, i) => `${i + 1}. ${f}`).join('. ') : 'No specific findings beyond the aggregate score.',
@@ -1081,10 +1081,10 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
     if (llmAnswers[i] || loading[i]) return
     setLoading(prev => ({ ...prev, [i]: true }))
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || '/api'
+      const apiUrl = getApiUrl()
       const res = await fetch(`${apiUrl}/explain`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiHeaders(),
         body: JSON.stringify({ question: faqs[i].q, result }),
       })
       const data = await res.json()
@@ -1181,10 +1181,10 @@ function FeedbackButton({ result }) {
     if (sending || submitted) return
     setSending(true)
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || '/api'
+      const apiUrl = getApiUrl()
       const res = await fetch(`${apiUrl}/feedback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiHeaders(),
         body: JSON.stringify({
           url: result.url,
           feedback_type: type,

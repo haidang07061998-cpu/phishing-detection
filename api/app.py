@@ -1,19 +1,54 @@
+import logging
 import re
 import ipaddress
+import traceback
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
+from api import config
+from api.security import rate_limit, require_api_key, reject_oversized_html
 from api.predictor import predictor
 from api.feedback import submit_feedback, get_feedback_stats
 from api.webhooks import set_webhook, delete_webhook, get_webhook, dispatch
 from api.whitelist import get_all as _get_whitelist, add_dynamic as _add_whitelist, remove_dynamic as _remove_whitelist
 from api.llm_explainer import explain as llm_explain
+from src.security.url_safety import validate_url as _validate_url_safety
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=config.ALLOWED_ORIGINS or ["http://localhost:3000"])
+app.config["MAX_CONTENT_LENGTH"] = config.MAX_JSON_BYTES
 
 MAX_BATCH_SIZE = 50
+
+_logger = logging.getLogger(__name__)
+
+
+@app.errorhandler(413)
+def _payload_too_large(_e):
+    return jsonify({"error": f"Request body too large (max {config.MAX_JSON_BYTES} bytes)."}), 413
+
+
+@app.errorhandler(400)
+def _bad_request(e):
+    return jsonify({"error": e.description or "Bad request."}), 400
+
+
+@app.errorhandler(401)
+def _unauthorized(_e):
+    return jsonify({"error": "Authentication required."}), 401
+
+
+@app.errorhandler(429)
+def _too_many_requests(e):
+    return jsonify({"error": e.description or "Rate limit exceeded."}), 429
+
+
+@app.errorhandler(Exception)
+def _unhandled(e):
+    # Never leak internal exception text to clients — log it server-side instead.
+    _logger.error("Unhandled error:\n%s", traceback.format_exc())
+    return jsonify({"error": "Internal server error."}), 500
 
 
 def validate_url(url: str) -> str | None:
@@ -24,6 +59,9 @@ def validate_url(url: str) -> str | None:
         return "URL must start with http:// or https://"
     if not parsed.netloc:
         return "Invalid URL: missing domain"
+    safety = _validate_url_safety(url.strip())
+    if not safety["valid"]:
+        return f"URL rejected by safety policy: {safety['reason']}"
     return None
 
 
@@ -61,6 +99,9 @@ def health_llm():
 
 
 @app.route("/predict", methods=["POST"])
+@reject_oversized_html
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key
 def predict():
     data = request.get_json(force=True)
     if not data or "url" not in data:
@@ -82,10 +123,13 @@ def predict():
         })
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("predict failed for %r: %s", url, traceback.format_exc())
+        return jsonify({"error": "Prediction failed."}), 500
 
 
 @app.route("/predict/batch", methods=["POST"])
+@rate_limit(minute=config.RATE_MIN // 2 or 1, hour=config.RATE_HOUR // 2 or 1)
+@require_api_key
 def predict_batch():
     data = request.get_json(force=True)
     if not data or "urls" not in data:
@@ -116,6 +160,8 @@ def predict_batch():
 
 
 @app.route("/domain", methods=["POST"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key
 def domain_lookup():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
@@ -130,10 +176,13 @@ def domain_lookup():
         result = predictor.lookup_domain(domain)
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("domain lookup failed for %r: %s", domain, traceback.format_exc())
+        return jsonify({"error": "Domain lookup failed."}), 500
 
 
 @app.route("/ip", methods=["POST"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key
 def ip_lookup():
     data = request.get_json(force=True)
     if not data or "ip" not in data:
@@ -148,10 +197,13 @@ def ip_lookup():
         result = predictor.lookup_ip(ip)
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        _logger.error("ip lookup failed for %r: %s", ip, traceback.format_exc())
+        return jsonify({"error": "IP lookup failed."}), 500
 
 
 @app.route("/feedback", methods=["POST"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key
 def feedback():
     data = request.get_json(force=True)
     if not data or "url" not in data or "feedback_type" not in data:
@@ -176,6 +228,8 @@ def feedback_stats():
 
 
 @app.route("/webhook", methods=["GET", "POST", "DELETE"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key
 def webhook():
     if request.method == "GET":
         return jsonify(get_webhook())
@@ -184,31 +238,47 @@ def webhook():
     data = request.get_json(force=True)
     if not data or "url" not in data:
         return jsonify({"error": "Missing 'url' in request body"}), 400
-    return jsonify(set_webhook(data["url"], data.get("events")))
+    result = set_webhook(data["url"], data.get("events"))
+    if result.get("status") == "error":
+        return jsonify(result), 400
+    return jsonify(result)
 
 
 @app.route("/whitelist", methods=["GET"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
 def whitelist_get():
     return jsonify(_get_whitelist())
 
 
 @app.route("/whitelist", methods=["POST"])
+@require_api_key
 def whitelist_add():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
         return jsonify({"error": "Missing 'domain' in request body"}), 400
-    return jsonify(_add_whitelist(data["domain"].strip().lower()))
+    domain = data["domain"].strip().lower()
+    err = validate_domain(domain)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(_add_whitelist(domain))
 
 
 @app.route("/whitelist", methods=["DELETE"])
+@require_api_key
 def whitelist_remove():
     data = request.get_json(force=True)
     if not data or "domain" not in data:
         return jsonify({"error": "Missing 'domain' in request body"}), 400
-    return jsonify(_remove_whitelist(data["domain"].strip().lower()))
+    domain = data["domain"].strip().lower()
+    err = validate_domain(domain)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(_remove_whitelist(domain))
 
 
 @app.route("/explain", methods=["POST"])
+@rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key
 def explain():
     data = request.get_json(force=True)
     if not data or "question" not in data or "result" not in data:

@@ -12,12 +12,16 @@ Failed requests return -1 for all features.
 import ssl
 import socket
 import datetime
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-import requests
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+
+if str(Path(__file__).resolve().parents[2]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.security.url_safety import safe_get, validate_url
 
 
 TRUSTED_CA_KEYWORDS = [
@@ -36,6 +40,10 @@ def get_certificate_info(hostname: str, port: int = 443, timeout: int = 5) -> di
         "ssl_issuer_trusted": -1,
     }
     try:
+        check = validate_url(f"https://{hostname}:{port}/")
+        if not check["valid"]:
+            return result
+
         context = ssl.create_default_context()
         with socket.create_connection((hostname, port), timeout=timeout) as sock:
             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
@@ -82,26 +90,20 @@ def check_redirects(url: str, timeout: int = 5, max_redirects: int = 5) -> dict:
     }
     try:
         original_domain = urlparse(url).hostname or ""
-        resp = requests.get(
-            url,
-            allow_redirects=True,
-            timeout=timeout,
-            headers={"User-Agent": "Mozilla/5.0"},
-            stream=True,
-        )
-        resp.close()
+        info = safe_get(url, max_redirects=max_redirects, timeout=timeout)
+        if not info["ok"]:
+            return result
 
-        history = resp.history
-        result["redirect_count"] = len(history)
+        result["redirect_count"] = info["redirect_count"]
 
-        final_domain = urlparse(resp.url).hostname or ""
+        final_domain = urlparse(info["final_url"]).hostname or ""
         if original_domain and final_domain:
             result["cross_domain_redirect"] = 1 if original_domain != final_domain else 0
         else:
             result["cross_domain_redirect"] = -1
 
         if result["redirect_count"] > 0:
-            result["final_url"] = resp.url
+            result["final_url"] = info["final_url"]
     except Exception:
         pass
     return result

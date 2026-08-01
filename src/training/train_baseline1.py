@@ -1,6 +1,12 @@
 """
 Baseline 1 - TabTransformer on ISCX-URL2016 (29 features) with 5-fold CV.
 Matches kaggle_baseline1.ipynb logic for local training.
+
+Leakage fixes (July 2026):
+- StandardScaler is now fitted per-fold on the train fold ONLY and then
+  applied to the test fold (no preprocessing leakage).
+- Per-fold test indices + scaler params are saved to baseline1_folds.json
+  so evaluate.py evaluates each fold model on its own hold-out fold only.
 """
 
 import os, sys, json
@@ -21,8 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.models.tab_transformer import TabTransformer
 
 PROJECT = Path(__file__).resolve().parents[1]
-DATA_PATH = PROJECT / "data" / "processed" / "iscx_features.csv"
-MODEL_DIR = PROJECT / "data" / "models"
+RAW_PATH = PROJECT / "data" / "raw" / "ISCXURL2016.csv"
+DATA_DIR = PROJECT / "data"
+MODEL_DIR = DATA_DIR / "models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 SEED = 42; N_FOLDS = 5
@@ -89,64 +96,118 @@ def evaluate(model, loader, crit):
 
 def main():
     print(f"Device: {DEVICE}")
+    print(f"Loading raw ISCX CSV...")
+    if not RAW_PATH.exists():
+        raise FileNotFoundError(f"Raw ISCX CSV not found: {RAW_PATH}")
 
-    if DATA_PATH.exists():
-        print(f"Loading preprocessed features from {DATA_PATH}")
-        df = pd.read_csv(DATA_PATH)
-        feat_cols = [c for c in df.columns if c not in ("label", "split")]
-        X = df[feat_cols].values.astype(np.float32)
-        y = df["label"].values.astype(np.float32)
-        print(f"Loaded: {X.shape}")
+    df = pd.read_csv(RAW_PATH, encoding='utf-8', low_memory=False)
+    avail_num = [c for c in ISCX_FEATURES_NUM if c in df.columns]
+    avail_cat = [c for c in ISCX_FEATURES_CAT if c in df.columns]
+
+    # Numerical features — RAW (StandardScaler is fitted per-fold later, inside CV)
+    X_num = df[avail_num].copy().replace([np.inf, -np.inf], np.nan)
+    for c in X_num.columns:
+        X_num[c] = pd.to_numeric(X_num[c], errors='coerce')
+    X_num = X_num.fillna(0).astype(np.float32).values
+
+    # Categorical features — integer labels, NOT standardized
+    if avail_cat:
+        X_cat = df[avail_cat].fillna(0).astype(int).clip(lower=0).values.astype(np.float32)
     else:
-        print(f"Loading raw ISCX CSV...")
-        raw_path = PROJECT / "data" / "raw" / "ISCXURL2016.csv"
-        df = pd.read_csv(raw_path, encoding='utf-8', low_memory=False)
-        avail_num = [c for c in ISCX_FEATURES_NUM if c in df.columns]
-        avail_cat = [c for c in ISCX_FEATURES_CAT if c in df.columns]
+        X_cat = None
 
-        X_num = df[avail_num].copy().replace([np.inf, -np.inf], np.nan)
-        for c in X_num.columns: X_num[c] = pd.to_numeric(X_num[c], errors='coerce')
-        X_num = X_num.fillna(0).astype(np.float32)
-        X_num_scaled = StandardScaler().fit_transform(X_num).astype(np.float32)
+    y = (df['URL_Type_obf_Type'].astype(str).str.strip().str.lower() == 'phishing').astype(int).values
+    print(f"Loaded raw: num={X_num.shape}, Phishing: {y.sum()}, Benign: {(y==0).sum()}")
 
-        if avail_cat:
-            X_cat = df[avail_cat].fillna(0).astype(int).clip(lower=0)
-            X = np.concatenate([X_num_scaled, X_cat.values.astype(np.float32)], axis=1)
+    # Dataset statistics (match kaggle_baseline1.ipynb artifact)
+    dataset_stats = {
+        'dataset': 'ISCX-URL2016',
+        'n_samples': int(len(df)),
+        'n_phishing': int(y.sum()),
+        'n_benign': int((y == 0).sum()),
+        'phishing_ratio': round(float(y.mean()), 6),
+        'n_features': len(avail_num) + (len(avail_cat) if avail_cat else 0),
+    }
+    with open(DATA_DIR / 'dataset_stats_iscx.json', 'w') as f:
+        json.dump(dataset_stats, f, indent=2)
+    print("Dataset stats saved to data/dataset_stats_iscx.json")
+
+    def build_features(num, cat):
+        """Concatenate (optionally scaled) numeric + raw categorical, pad to 29."""
+        if cat is not None:
+            feat = np.concatenate([num, cat], axis=1)
         else:
-            X = X_num_scaled
-        y = (df['URL_Type_obf_Type'].astype(str).str.strip().str.lower() == 'phishing').astype(int).values
-        print(f"Loaded raw: {X.shape}, Phishing: {y.sum()}, Benign: {(y==0).sum()}")
+            feat = num
+        if feat.shape[1] < TABULAR_DIM:
+            pad = np.zeros((feat.shape[0], TABULAR_DIM - feat.shape[1]), dtype=np.float32)
+            feat = np.concatenate([feat, pad], axis=1)
+        return feat.astype(np.float32)
+
+    def fold_cat(idx):
+        return None if X_cat is None else X_cat[idx]
 
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
     all_metrics = []
+    all_preds, all_labels, history = [], [], []
+    folds_meta = []
     pos_count = y.sum(); neg_count = len(y) - pos_count
     pos_weight = torch.tensor([neg_count / pos_count], device=DEVICE)
     crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     print(f"pos_weight={pos_weight.item():.2f} (neg={neg_count}, pos={int(pos_count)})")
 
-    for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y)):
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(np.arange(len(y)), y)):
         print(f"\n--- Fold {fold+1}/{N_FOLDS} ---")
-        X_tr, X_te = X[tr_idx], X[te_idx]
+
+        # Per-fold StandardScaler: fit on train fold ONLY, then transform test fold
+        scaler = StandardScaler().fit(X_num[tr_idx])
+        X_tr = build_features(scaler.transform(X_num[tr_idx]).astype(np.float32), fold_cat(tr_idx))
+        X_te = build_features(scaler.transform(X_num[te_idx]).astype(np.float32), fold_cat(te_idx))
         y_tr, y_te = y[tr_idx], y[te_idx]
         tr_ld = DataLoader(SimpleDataset(X_tr, y_tr), batch_size=BS, shuffle=True)
         te_ld = DataLoader(SimpleDataset(X_te, y_te), batch_size=BS)
 
-        model = TabTransformer(nf=X.shape[1], classifier=True).to(DEVICE)
+        model = TabTransformer(nf=X_tr.shape[1], classifier=True).to(DEVICE)
         opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-5)
         sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EP)
 
+        hist = []
         for ep in range(1, EP + 1):
             tl = train_epoch(model, tr_ld, opt, crit)
             m, _, _ = evaluate(model, te_ld, crit)
             sched.step()
+            hist.append({'epoch': ep, 'train_loss': round(float(tl), 5),
+                         'val_auc': round(float(m['auc']), 5), 'val_f1': round(float(m['f1']), 5)})
             if ep % 10 == 0:
                 print(f"  Epoch {ep:2d}/{EP} | Loss: {tl:.4f} | AUC: {m['auc']:.4f} | F1: {m['f1']:.4f}")
 
-        fm, _, _ = evaluate(model, te_ld, crit)
+        fm, fp, fl = evaluate(model, te_ld, crit)
         fm['fold'] = fold + 1
         all_metrics.append(fm)
+        all_preds.append(fp); all_labels.append(fl)
+        history.append({'fold': fold + 1, 'epochs': hist})
         torch.save(model.state_dict(), MODEL_DIR / f'baseline1_fold{fold+1}.pt')
+        folds_meta.append({
+            "fold": int(fold + 1),
+            "test_indices": te_idx.tolist(),
+            "scaler_mean": scaler.mean_.tolist(),
+            "scaler_scale": scaler.scale_.tolist(),
+            "n_features": int(X_tr.shape[1]),
+        })
         print(f"  Done: Acc={fm['accuracy']:.4f}, AUC={fm['auc']:.4f}, F1={fm['f1']:.4f}")
+
+    with open(MODEL_DIR / 'baseline1_folds.json', 'w') as f:
+        json.dump({"n_folds": N_FOLDS, "folds": folds_meta}, f, indent=2)
+    print(f"Fold metadata saved to baseline1_folds.json")
+
+    with open(DATA_DIR / 'training_logs_baseline1.json', 'w') as f:
+        json.dump(history, f, indent=2)
+    fp_obj = np.empty(N_FOLDS, dtype=object); fl_obj = np.empty(N_FOLDS, dtype=object)
+    for f in range(N_FOLDS):
+        fp_obj[f] = all_preds[f]; fl_obj[f] = all_labels[f]
+    np.savez(DATA_DIR / 'predictions_baseline1.npz',
+             preds=np.concatenate(all_preds), labels=np.concatenate(all_labels),
+             fold_preds=fp_obj, fold_labels=fl_obj)
+    print("Training logs + predictions saved to data/")
 
     avg = {k: np.mean([m[k] for m in all_metrics]) for k in ['accuracy','precision','recall','f1','auc']}
     std = {k: np.std([m[k] for m in all_metrics]) for k in ['accuracy','precision','recall','f1','auc']}

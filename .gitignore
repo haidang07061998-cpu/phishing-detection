@@ -19,6 +19,11 @@ data/cache/**
 # Proposed checkpoints are ~611MB each - too large for GitHub
 data/models/proposed_fold*
 data/models/fold_results.pkl
+# Runtime state (regenerated automatically)
+data/dynamic_whitelist.json
+data/webhook_config.json
+data/audit/
+data/feedback/*.jsonl
 
 # IDE
 .vscode/

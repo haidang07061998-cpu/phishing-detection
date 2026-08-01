@@ -22,6 +22,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from src.security.url_safety import validate_url, safe_get
+
+
+def _is_safe_url(url) -> bool:
+    check = validate_url(url)
+    return check["valid"]
+
 
 def check_user_agent_cloaking(url, timeout=10):
     """Compare responses with different User-Agent strings."""
@@ -32,14 +39,21 @@ def check_user_agent_cloaking(url, timeout=10):
 
     results = {}
     for label, ua in [("bot", bot_ua), ("browser", browser_ua)]:
+        if not _is_safe_url(url):
+            results[label] = {"error": "URL rejected by safety policy"}
+            continue
         try:
-            resp = requests.get(url, headers={"User-Agent": ua}, timeout=timeout, allow_redirects=True)
+            info = safe_get(url, timeout=timeout)
+            if not info["ok"]:
+                results[label] = {"error": info["error"]}
+                continue
+            text = info["content"].decode("utf-8", errors="replace")
             results[label] = {
-                "status": resp.status_code,
-                "length": len(resp.text),
-                "title": _extract_title(resp.text),
-                "has_forms": "form" in resp.text.lower(),
-                "has_password": "password" in resp.text.lower(),
+                "status": info["status_code"],
+                "length": len(text),
+                "title": _extract_title(text),
+                "has_forms": "form" in text.lower(),
+                "has_password": "password" in text.lower(),
             }
         except Exception as e:
             results[label] = {"error": str(e)}
@@ -61,15 +75,22 @@ def check_referer_cloaking(url, timeout=10):
 
     results = {}
     for label, ref in referers.items():
+        if not _is_safe_url(url):
+            results[label] = {"error": "URL rejected by safety policy"}
+            continue
         headers = {"User-Agent": ua}
         if ref:
             headers["Referer"] = ref
         try:
-            resp = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+            info = safe_get(url, timeout=timeout, headers=headers)
+            if not info["ok"]:
+                results[label] = {"error": info["error"]}
+                continue
+            text = info["content"].decode("utf-8", errors="replace")
             results[label] = {
-                "status": resp.status_code,
-                "length": len(resp.text),
-                "title": _extract_title(resp.text),
+                "status": info["status_code"],
+                "length": len(text),
+                "title": _extract_title(text),
             }
         except Exception as e:
             results[label] = {"error": str(e)}

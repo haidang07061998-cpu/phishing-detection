@@ -2,8 +2,9 @@ import { useState } from 'react'
 import UrlInput from './components/UrlInput'
 import ResultCard from './components/ResultCard'
 import { useTheme } from './ThemeContext'
+import { getApiUrl, apiFetch } from './api'
 
-const API_URL = import.meta.env.VITE_API_URL || '/api'
+const API_URL = getApiUrl()
 
 function SkeletonLine({ width, height }) {
   return <div className="skeleton-pulse" style={{ width: width || '60%', height: height || '0.75rem', borderRadius: '6px', background: 'var(--bg-tab)' }} />
@@ -89,13 +90,10 @@ function App() {
     setResult(null)
     const cfg = TAB_CONFIG[activeTab]
     try {
-      const res = await fetch(`${API_URL}${cfg.endpoint}`, {
+      const data = await apiFetch(cfg.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cfg.bodyFn(inputValue, htmlContent)),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `Server error (${res.status})`)
       setResult(data)
       setHistory(prev => [
         { url: inputValue, time: new Date().toLocaleTimeString(), phishing: data.phishing_probability >= 0.5, prob: data.phishing_probability ? data.phishing_probability * 100 : null },

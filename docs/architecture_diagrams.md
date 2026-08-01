@@ -147,4 +147,4 @@ Dataset
    +------------------------+
 ```
 
-Note: Proposed model uses 3-fold CV due to Kaggle GPU memory constraints.
+Note: Cả 3 model (Baseline 1, Baseline 2, Proposed) đều dùng 5-fold CV với cùng split/seed.

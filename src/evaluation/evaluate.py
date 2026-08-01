@@ -49,40 +49,69 @@ def compute_metrics(labels, preds):
     }
 
 
+def _restore_scaler(meta, n_features):
+    """Rebuild a StandardScaler from per-fold params saved during training."""
+    from sklearn.preprocessing import StandardScaler
+    sc = StandardScaler()
+    sc.mean_ = np.asarray(meta["scaler_mean"], dtype=np.float64)
+    sc.scale_ = np.asarray(meta["scaler_scale"], dtype=np.float64)
+    sc.n_features_in_ = n_features
+    return sc
+
+
 def evaluate_baseline1():
     import pandas as pd
-    from sklearn.preprocessing import StandardScaler
+    from src.training.train_baseline1 import ISCX_FEATURES_NUM, ISCX_FEATURES_CAT, TABULAR_DIM
 
-    try:
-        df = pd.read_csv(MODEL_DIR.parent / "processed" / "iscx_features.csv")
-        feat_cols = [c for c in df.columns if c not in ("label", "split")]
-        X = df[feat_cols].values.astype(np.float32)
-        y = df["label"].values.astype(np.float32)
-    except FileNotFoundError:
-        df = pd.read_csv(PROJECT / "data" / "raw" / "ISCXURL2016.csv", encoding="utf-8", low_memory=False)
-        ISCX_NUM = ['urlLen','domainlength','pathLength','subDirLen','fileNameLen',
-            'this.fileExtLen','ArgLen','Entropy_URL','Entropy_Domain','Entropy_DirectoryName',
-            'Entropy_Filename','Entropy_Afterpath','spcharUrl','URL_DigitCount','host_DigitCount',
-            'NumberRate_URL','NumberRate_Domain','NumberRate_DirectoryName','NumberRate_FileName',
-            'SymbolCount_URL','SymbolCount_Domain','URL_Letter_Count','host_letter_count',
-            'NumberofDotsinURL','LongestPathTokenLength','CharacterContinuityRate','Domain_LongestWordLength']
-        ISCX_CAT = ['URL_sensitiveWord','ISIpAddressInDomainName']
-        X_num = df[ISCX_NUM].copy().replace([np.inf, -np.inf], np.nan).fillna(0).astype(np.float32)
-        X_num = StandardScaler().fit_transform(X_num).astype(np.float32)
-        X_cat = df[ISCX_CAT].fillna(0).astype(int).clip(lower=0).values.astype(np.float32)
-        X = np.concatenate([X_num, X_cat], axis=1)
-        y = (df['URL_Type_obf_Type'].astype(str).str.strip().str.lower() == 'phishing').astype(int).values
+    df = pd.read_csv(PROJECT / "data" / "raw" / "ISCXURL2016.csv", encoding="utf-8", low_memory=False)
+    avail_num = [c for c in ISCX_FEATURES_NUM if c in df.columns]
+    avail_cat = [c for c in ISCX_FEATURES_CAT if c in df.columns]
 
-    ds = torch.utils.data.TensorDataset(torch.from_numpy(X), torch.from_numpy(y).unsqueeze(1))
-    loader = DataLoader(ds, batch_size=256)
+    # Same raw feature pipeline as train_baseline1.py (scaler applied per-fold)
+    X_num = df[avail_num].copy().replace([np.inf, -np.inf], np.nan)
+    for c in X_num.columns:
+        X_num[c] = pd.to_numeric(X_num[c], errors="coerce")
+    X_num = X_num.fillna(0).astype(np.float32).values
 
-    # Average over all fold checkpoints
+    if avail_cat:
+        X_cat = df[avail_cat].fillna(0).astype(int).clip(lower=0).values.astype(np.float32)
+    else:
+        X_cat = None
+
+    y = (df['URL_Type_obf_Type'].astype(str).str.strip().str.lower() == 'phishing').astype(int).values.astype(np.float32)
+
+    def build_features(num, cat):
+        if cat is not None:
+            feat = np.concatenate([num, cat], axis=1)
+        else:
+            feat = num
+        if feat.shape[1] < TABULAR_DIM:
+            pad = np.zeros((feat.shape[0], TABULAR_DIM - feat.shape[1]), dtype=np.float32)
+            feat = np.concatenate([feat, pad], axis=1)
+        return feat.astype(np.float32)
+
+    folds_path = MODEL_DIR / "baseline1_folds.json"
+    if not folds_path.exists():
+        print("baseline1_folds.json not found - run train_baseline1.py first")
+        return {"model": "Baseline 1 - TabTransformer (ISCX)", "accuracy": 0, "precision": 0, "recall": 0, "f1": 0, "auc": 0, "fpr": 0}
+
+    folds_meta = json.load(open(folds_path))["folds"]
+
+    # Each fold model is evaluated ONLY on its own hold-out fold (no leakage)
     fold_preds, fold_labels = [], []
-    for fold in range(1, 6):
+    for meta in folds_meta:
+        fold = meta["fold"]
         ckpt = MODEL_DIR / f"baseline1_fold{fold}.pt"
         if not ckpt.exists():
             continue
-        model = TabTransformer(nf=X.shape[1], classifier=True)
+        sc = _restore_scaler(meta, X_num.shape[1])
+        te_idx = np.asarray(meta["test_indices"], dtype=np.int64)
+        X_te = build_features(sc.transform(X_num[te_idx]).astype(np.float32), None if X_cat is None else X_cat[te_idx])
+        y_te = y[te_idx]
+        ds = torch.utils.data.TensorDataset(torch.from_numpy(X_te), torch.from_numpy(y_te).unsqueeze(1))
+        loader = DataLoader(ds, batch_size=256)
+
+        model = TabTransformer(nf=X_te.shape[1], classifier=True)
         load_model_weights(model, ckpt)
         preds, labs = [], []
         with torch.no_grad():
@@ -108,79 +137,89 @@ def evaluate_baseline1():
 
 def evaluate_baseline2():
     import pandas as pd
-    from sklearn.preprocessing import StandardScaler
+    from src.training.train_baseline2 import extract_url_features, URL_FEATURE_KEYS, TABULAR_DIM
 
-    # Reconstruct URL features from raw data (same as train_baseline2)
+    SEED = 42
+
+    # Reconstruct the SAME 50k sampled df as train_baseline2.py / kaggle_baseline2.ipynb
     df = pd.read_csv(PROJECT / "data" / "raw" / "mendeley" / "index.csv", encoding="utf-8")
-    TABULAR_DIM = 29
-    URL_KEYS = ['url_length','domain_length','path_length','entropy','special_char_ratio',
-                'digit_ratio','subdomain_count','has_https','has_ip_address',
-                'suspicious_keywords','url_depth','tld_in_path']
-
-    import re, math
-    from urllib.parse import urlparse
-
-    def extract_url_features(url):
-        parsed = urlparse(str(url).strip())
-        domain = (parsed.netloc or parsed.hostname or '').split(':')[0]
-        path = parsed.path or ''
-        fu = str(url).strip(); parts = domain.split('.')
-        sc = sum(1 for c in fu if c in '@-_?.&=%+#~!'); dc = sum(1 for c in fu if c.isdigit())
-        tc = max(len(fu), 1)
-        ip_r = re.compile(r'^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$')
-        return {k: 0.0 for k in URL_KEYS} | {
-            'url_length': len(fu), 'domain_length': len(domain), 'path_length': len(path),
-            'entropy': round(-sum((text.count(c)/len(text))*math.log2(text.count(c)/len(text)) for c in set(text) if text.count(c)>0), 4) if (text := fu) else 0.0,
-            'special_char_ratio': round(sc/tc, 4), 'digit_ratio': round(dc/tc, 4),
-            'subdomain_count': max(0, len(parts)-2) if len(parts) >= 2 else 0,
-            'has_https': 1 if parsed.scheme == 'https' else 0,
-            'has_ip_address': 1 if ip_r.match(domain) else 0,
-            'suspicious_keywords': sum(1 for kw in ['login','secure','verify','account','update','banking',
-                'confirm','signin','password','reset','authenticate','paypal','webscr','free','bonus'] if kw in fu.lower()),
-            'url_depth': len([s for s in path.split('/') if s]),
-            'tld_in_path': 1 if any(f'.{t}' in path.lower() for t in
-                {'com','org','net','gov','edu','mil','io','co','uk','au','de','jp','fr','ca','ru','cn','in','br','pl','html','php','asp','jsp'}) else 0,
-        }
+    SAMPLE_SIZE = 50000
+    n_each = SAMPLE_SIZE // 2
+    df_p = df[df['result']==1].sample(n=min(n_each, (df['result']==1).sum()), random_state=SEED)
+    df_g = df[df['result']==0].sample(n=min(n_each, (df['result']==0).sum()), random_state=SEED)
+    df = pd.concat([df_p, df_g]).sample(frac=1, random_state=SEED).reset_index(drop=True)
 
     url_vectors = []
     for _, row in df.iterrows():
-        vec = [extract_url_features(str(row['url']).strip())[k] for k in URL_KEYS]
+        feats = extract_url_features(str(row['url']).strip())
+        vec = [feats[k] for k in URL_FEATURE_KEYS]
         vec += [-1.0] * (TABULAR_DIM - len(vec))
         url_vectors.append(vec)
 
     X = np.array(url_vectors, dtype=np.float32)
-    X = StandardScaler().fit_transform(X).astype(np.float32)
     y = df['result'].values.astype(np.float32)
 
-    ds = torch.utils.data.TensorDataset(torch.from_numpy(X), torch.from_numpy(y).unsqueeze(1))
-    loader = DataLoader(ds, batch_size=256)
+    folds_path = MODEL_DIR / "baseline2_folds.json"
+    splits_path = MODEL_DIR / "baseline2_splits.json"
+    if not folds_path.exists():
+        print("baseline2_folds.json not found - run train_baseline2.py first")
+        return {"model": "Baseline 2 - TabTransformer (Mendeley URL)", "accuracy": 0, "precision": 0, "recall": 0, "f1": 0, "auc": 0, "fpr": 0}
 
-    fold_preds, fold_labels = [], []
-    for fold in range(1, 6):
+    folds_meta = json.load(open(folds_path))["folds"]
+    test_idx = np.asarray(json.load(open(splits_path))["test_indices"], dtype=np.int64) if splits_path.exists() else None
+
+    # Each fold model is evaluated on its own CV hold-out fold AND on the held-out test set
+    cv_preds, cv_labels, test_preds, test_labels = [], [], [], []
+    for meta in folds_meta:
+        fold = meta["fold"]
         ckpt = MODEL_DIR / f"baseline2_fold{fold}.pt"
         if not ckpt.exists():
             continue
-        model = TabTransformer(nf=X.shape[1], classifier=True)
-        load_model_weights(model, ckpt)
-        preds, labs = [], []
-        with torch.no_grad():
-            for Xb, yb in loader:
-                logits = model(Xb.to(DEVICE))
-                preds.extend(torch.sigmoid(logits).cpu().numpy())
-                labs.extend(yb.numpy())
-        fold_preds.append(np.array(preds))
-        fold_labels.append(np.array(labs))
+        sc = _restore_scaler(meta, X.shape[1])
 
-    if not fold_preds:
+        def run(idx):
+            X_te = sc.transform(X[idx]).astype(np.float32)
+            ds = torch.utils.data.TensorDataset(torch.from_numpy(X_te), torch.from_numpy(y[idx]).unsqueeze(1))
+            loader = DataLoader(ds, batch_size=256)
+            model = TabTransformer(nf=X_te.shape[1], classifier=True)
+            load_model_weights(model, ckpt)
+            preds, labs = [], []
+            with torch.no_grad():
+                for Xb, yb in loader:
+                    logits = model(Xb.to(DEVICE))
+                    preds.extend(torch.sigmoid(logits).cpu().numpy())
+                    labs.extend(yb.numpy())
+            return np.array(preds), np.array(labs)
+
+        p, l = run(np.asarray(meta["test_indices"], dtype=np.int64))
+        cv_preds.append(p); cv_labels.append(l)
+        if test_idx is not None:
+            p, l = run(test_idx)
+            test_preds.append(p); test_labels.append(l)
+
+    if not cv_preds:
         return {"model": "Baseline 2 - TabTransformer (Mendeley URL)", "accuracy": 0, "precision": 0, "recall": 0, "f1": 0, "auc": 0, "fpr": 0}
 
-    metrics_list = [compute_metrics(fl, fp) for fl, fp in zip(fold_labels, fold_preds)]
-    avg = {k: np.mean([m[k] for m in metrics_list]) for k in metrics_list[0]}
-    std = {k: np.std([m[k] for m in metrics_list]) for k in metrics_list[0]}
-    results = {"model": "Baseline 2 - TabTransformer (Mendeley URL)", **avg, **{k + "_std": float(std[k]) for k in std}}
+    cv_metrics = [compute_metrics(fl, fp) for fl, fp in zip(cv_labels, cv_preds)]
+    avg = {k: np.mean([m[k] for m in cv_metrics]) for k in cv_metrics[0]}
+    std = {k: np.std([m[k] for m in cv_metrics]) for k in cv_metrics[0]}
+
+    if test_preds:
+        test_metrics = [compute_metrics(fl, fp) for fl, fp in zip(test_labels, test_preds)]
+        test_avg = {k: np.mean([m[k] for m in test_metrics]) for k in test_metrics[0]}
+        test_std = {k: np.std([m[k] for m in test_metrics]) for k in test_metrics[0]}
+        results = {
+            "model": "Baseline 2 - TabTransformer (Mendeley URL)",
+            **test_avg, **{k + "_std": float(test_std[k]) for k in test_std},
+            **{"cv_" + k: float(avg[k]) for k in avg},
+            **{"cv_" + k + "_std": float(std[k]) for k in std},
+        }
+        print(f"Baseline 2 held-out test: Acc={test_avg['accuracy']:.4f}, AUC={test_avg['auc']:.4f}, F1={test_avg['f1']:.4f}")
+    else:
+        results = {"model": "Baseline 2 - TabTransformer (Mendeley URL)", **avg, **{k + "_std": float(std[k]) for k in std}}
+        print(f"Baseline 2 CV: Acc={avg['accuracy']:.4f}, AUC={avg['auc']:.4f}, F1={avg['f1']:.4f}")
     with open(MODEL_DIR / "evaluation_baseline2.json", "w") as f:
         json.dump(results, f, indent=2)
-    print(f"Baseline 2: Acc={avg['accuracy']:.4f}, AUC={avg['auc']:.4f}, F1={avg['f1']:.4f}")
     return results
 
 
@@ -191,6 +230,12 @@ def evaluate_proposed():
         split = json.load(f)
     with open(PROJECT / "data" / "processed" / "mendeley_full" / "data.jsonl", "r") as f:
         records = [json.loads(line) for line in f]
+
+    folds_path = MODEL_DIR / "proposed_folds.json"
+    if not folds_path.exists():
+        print("proposed_folds.json not found - run train_proposed.py first")
+        return {"model": "Proposed (Gated Fusion)", "accuracy": 0, "precision": 0, "recall": 0, "f1": 0, "auc": 0, "fpr": 0}
+    folds_meta = json.load(open(folds_path))["folds"]
 
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained("answerdotai/ModernBERT-base")
@@ -207,14 +252,21 @@ def evaluate_proposed():
             'label': r["label"],
         })
 
-    ld = DataLoader(CachedDataset(full_data, np.arange(len(full_data))),
-                    batch_size=32, collate_fn=collate_fn, num_workers=0)
-
+    # Evaluate each fold model on the held-out test set using its own train-fold scaler
     fold_preds, fold_labels = [], []
-    for fold in range(1, 4):
+    for meta in folds_meta:
+        fold = meta["fold"]
         ckpt = MODEL_DIR / f"proposed_fold{fold}_best.pt"
         if not ckpt.exists():
             continue
+        ld = DataLoader(
+            CachedDataset(
+                full_data, np.arange(len(full_data)),
+                np.array(meta["url_mean"]), np.array(meta["url_std"]),
+                np.array(meta["dom_mean"]), np.array(meta["dom_std"]),
+            ),
+            batch_size=32, collate_fn=collate_fn, num_workers=0,
+        )
         model = PhishingDetector()
         load_model_weights(model, ckpt)
         preds, labs = [], []
