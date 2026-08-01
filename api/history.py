@@ -41,6 +41,7 @@ def append_scan(record: dict) -> None:
         "engine_count": record.get("engine_count", 0),
         "analysis_quality": record.get("analysis_quality", ""),
         "whitelisted": bool(record.get("whitelisted")),
+        "latency_ms": record.get("latency_ms"),
     }
     with _history_lock:
         HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)

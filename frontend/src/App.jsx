@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import UrlInput from './components/UrlInput'
 import ResultCard from './components/ResultCard'
 import ReportsPanel from './components/ReportsPanel'
@@ -95,7 +95,10 @@ function App() {
   const [history, setHistory] = useState([])
   const [activeTab, setActiveTab] = useState('url')
   const [metrics, setMetrics] = useState(DEFAULT_METRICS)
+  const [elapsedMs, setElapsedMs] = useState(0)
   const { isDark, toggle: toggleTheme } = useTheme()
+  const abortRef = useRef(null)
+  const lastRequestRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -134,14 +137,24 @@ function App() {
   const isReportTab = activeTab === 'reports'
 
   const handlePredict = async (inputValue, htmlContent) => {
+    // Cancel any in-flight scan first.
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    lastRequestRef.current = { input: inputValue, html: htmlContent, tab: activeTab }
+
     setLoading(true)
     setError(null)
     setResult(null)
+    const startedAt = Date.now()
+    setElapsedMs(0)
+    const timer = setInterval(() => setElapsedMs(Date.now() - startedAt), 250)
     const cfg = TAB_CONFIG[activeTab]
     try {
       const data = await apiFetch(cfg.endpoint, {
         method: 'POST',
         body: JSON.stringify(cfg.bodyFn(inputValue, htmlContent)),
+        signal: controller.signal,
       })
       setResult(data)
       setHistory(prev => [
@@ -149,9 +162,27 @@ function App() {
         ...prev,
       ].slice(0, 10))
     } catch (err) {
-      setError(friendlyError(err))
+      if (err && err.name === 'AbortError') {
+        setError('Scan cancelled.')
+      } else {
+        setError(friendlyError(err))
+      }
     } finally {
+      clearInterval(timer)
       setLoading(false)
+      abortRef.current = null
+    }
+  }
+
+  const cancelScan = () => {
+    if (abortRef.current) abortRef.current.abort()
+    setLoading(false)
+  }
+
+  const retryScan = () => {
+    const last = lastRequestRef.current
+    if (last && last.tab === activeTab) {
+      handlePredict(last.input, last.html)
     }
   }
 
@@ -278,7 +309,24 @@ function App() {
         <UrlInput onPredict={handlePredict} loading={loading} activeTab={activeTab} />
 
         {loading && (
-          <SkeletonResult activeTab={activeTab} />
+          <div style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                {'\u23F3'} Analyzing&hellip; {(elapsedMs / 1000).toFixed(1)}s
+              </span>
+              <button
+                onClick={cancelScan}
+                style={{
+                  padding: '0.3rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border)',
+                  background: 'var(--bg-tab)', color: 'var(--text-secondary)', fontSize: '0.78rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            <SkeletonResult activeTab={activeTab} />
+          </div>
         )}
 
         {error && (
@@ -287,7 +335,19 @@ function App() {
             padding: '1rem 1.25rem', width: '100%', marginTop: '1rem',
           }}>
             <p style={{ margin: 0, fontWeight: 600, color: 'var(--danger)', fontSize: '0.9rem' }}>Error</p>
-            <p style={{ margin: '0.25rem 0 0', color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</p>
+            <p style={{ margin: '0.25rem 0 0.75rem', color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</p>
+            {lastRequestRef.current && lastRequestRef.current.tab === activeTab && (
+              <button
+                onClick={retryScan}
+                style={{
+                  padding: '0.35rem 1rem', borderRadius: '6px', border: 'none',
+                  background: 'var(--accent)', color: '#fff', fontSize: '0.8rem', fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {'\u21BB'} Retry
+              </button>
+            )}
           </div>
         )}
 

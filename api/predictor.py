@@ -418,6 +418,7 @@ class PhishingPredictor:
     # ------------------------------------------------------------------
     def predict(self, url: str, html_content: str | None = None,
                 explain: bool | None = None) -> dict:
+        _t_start = time.monotonic()
         brand_info = {"has_brand_impersonation": False, "brands_detected": [],
                       "max_confidence": 0.0, "risk_score": 0.0}
 
@@ -552,6 +553,7 @@ class PhishingPredictor:
         result_dict = {
             "url": url,
             "timestamp": _utc_timestamp(),
+            "latency_ms": round((time.monotonic() - _t_start) * 1000, 1),
             "effective_url": effective_url if effective_url != url else None,
             "phishing_probability": round(prob_val, 4),
             "probability_band": _probability_band(raw_logit, self.temperature),
@@ -618,6 +620,7 @@ class PhishingPredictor:
         }
 
     def lookup_domain(self, domain: str) -> dict:
+        _t_start = time.monotonic()
         url = f"https://{domain}"
         dns_whois = self._extract_dns_whois(url)
         # Run SSL analysis too — passing {} makes dns_infra_engine treat SSL as
@@ -645,6 +648,7 @@ class PhishingPredictor:
         return {
             "domain": domain,
             "timestamp": _utc_timestamp(),
+            "latency_ms": round((time.monotonic() - _t_start) * 1000, 1),
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
             "suspicious_tld": check_suspicious_tld(url),
@@ -656,6 +660,7 @@ class PhishingPredictor:
         }
 
     def lookup_ip(self, ip: str) -> dict:
+        _t_start = time.monotonic()
         url = f"http://{ip}"
         dns_whois = self._extract_dns_whois(url)
         ssl_redirect = self._extract_ssl_redirect(f"https://{ip}")
@@ -672,6 +677,7 @@ class PhishingPredictor:
         return {
             "ip": ip,
             "timestamp": _utc_timestamp(),
+            "latency_ms": round((time.monotonic() - _t_start) * 1000, 1),
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
             "suspicious_tld": 0,

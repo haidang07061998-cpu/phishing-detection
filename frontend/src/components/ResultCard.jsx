@@ -455,6 +455,25 @@ function ReputationSection({ reputation }) {
   )
 }
 
+function formatLatency(ms) {
+  if (ms == null || Number.isNaN(Number(ms))) return null
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  return `${(ms / 1000).toFixed(2)} s`
+}
+
+function getMissingSources(result) {
+  const missing = []
+  const dns = result?.dns_whois || {}
+  const ssl = result?.ssl_redirect || {}
+  const dnsMissing = Object.keys(dns).length === 0 || dns.a_record_count === -1 || dns.a_record_count === undefined
+  const sslMissing = Object.keys(ssl).length === 0 || ssl.ssl_valid === -1 || ssl.ssl_valid === undefined
+  if (!result?.html_provided) missing.push('HTML / DOM')
+  else if (result.analysis_quality === 'limited') missing.push('HTML / DOM (parse failed)')
+  if (dnsMissing) missing.push('DNS / WHOIS')
+  if (sslMissing) missing.push('SSL / Redirect')
+  return missing
+}
+
 function DataCoverage({ result }) {
   const dns = result?.dns_whois || {}
   const ssl = result?.ssl_redirect || {}
@@ -483,6 +502,77 @@ function DataCoverage({ result }) {
   )
 }
 
+function ScoreLegend({ result }) {
+  const ai = result.phishing_probability
+  const agg = result.aggregate_score
+  const threat = result.threat_match
+  const items = [
+    {
+      key: 'ai',
+      label: 'AI Probability',
+      value: ai != null ? `${(ai * 100).toFixed(1)}%` : 'N/A',
+      color: ai >= 0.6 ? 'var(--danger)' : ai >= 0.3 ? 'var(--warning)' : 'var(--success)',
+      desc: 'Raw Gated-Fusion model output (temperature-scaled sigmoid). Text + URL patterns only.',
+    },
+    {
+      key: 'agg',
+      label: 'Aggregate Risk Score',
+      value: agg != null ? `${agg}/100` : 'N/A',
+      color: agg >= 60 ? 'var(--danger)' : agg >= 30 ? 'var(--warning)' : 'var(--success)',
+      desc: 'Weighted vote across AI + DNS + URL + Brand engines. This is the headline verdict.',
+    },
+    {
+      key: 'threat',
+      label: 'Threat Intelligence',
+      value: threat ? (threat.layer === 'community_feed' ? 'Feed Hit' : 'Blocklist Hit') : 'No Match',
+      color: threat ? 'var(--danger)' : 'var(--text-muted)',
+      desc: threat
+        ? `Matched "${threat.value}" (${threat.source || threat.layer}). A strong signal, not a hard verdict.`
+        : 'No known-threat database or blocklist entry matched this URL.',
+    },
+  ]
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem',
+      marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px',
+      background: 'var(--bg-page)', border: '1px solid var(--border)',
+    }} role="list" aria-label="How the risk numbers differ">
+      {items.map(it => (
+        <div key={it.key} role="listitem" style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.68rem', fontWeight: 600 }}>{it.label}</span>
+            <span style={{ color: it.color, fontSize: '0.78rem', fontWeight: 700 }}>{it.value}</span>
+          </div>
+          <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.68rem', lineHeight: '1.4' }}>{it.desc}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LimitedAnalysisBanner({ result }) {
+  const missing = getMissingSources(result)
+  if (missing.length === 0) return null
+  const reason = result.analysis_reason || ''
+  return (
+    <div style={{
+      marginBottom: '1rem', padding: '0.6rem 0.9rem', borderRadius: '8px',
+      background: 'var(--warning-bg)', border: '1px solid var(--warning)44',
+    }}>
+      <p style={{ margin: 0, color: 'var(--warning)', fontSize: '0.8rem', fontWeight: 700 }}>
+        {'\u26A0'} Limited Analysis — missing: {missing.join(', ')}
+      </p>
+      <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: '1.4' }}>
+        {reason
+          ? `Reason: ${reason}. `
+          : 'Some infrastructure or page signals were unavailable, so the result relies on a subset of evidence. '
+          }
+        The score still combines the engines that had data.
+      </p>
+    </div>
+  )
+}
+
 function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance, confidence }) {
   const suspTld = result.suspicious_tld
   const isShort = result.is_shortener
@@ -507,21 +597,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
       {!isWhitelisted && importance && <FeatureImportanceChart importance={importance} />}
-      {result.analysis_quality === 'limited' && (
-        <div style={{
-          marginTop: '1rem', padding: '0.6rem 0.9rem', borderRadius: '8px',
-          background: 'var(--warning-bg)', border: '1px solid var(--warning)44',
-        }}>
-          <p style={{ margin: 0, color: 'var(--warning)', fontSize: '0.8rem', fontWeight: 700 }}>
-            {'\u26A0'} Limited Analysis
-          </p>
-          <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4' }}>
-            {result.analysis_reason === 'no html content provided'
-              ? 'No HTML content was submitted — behavioral (DOM/JS) signals are unavailable. Upload an HTML page for deeper analysis.'
-              : (result.analysis_reason || 'The page could not be fully analyzed.')}
-          </p>
-        </div>
-      )}
+      <LimitedAnalysisBanner result={result} />
       {isWhitelisted && (
             <div style={{
               padding: '1rem', borderRadius: '8px', background: 'var(--success-bg)',
@@ -539,6 +615,8 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
       </div>
 
       <DataCoverage result={result} />
+
+      <ScoreLegend result={result} />
 
       {result.explanation && (
         <div style={{
@@ -731,6 +809,12 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                   const rows = [
                   { label: 'Aggregate Risk Score', value: `${pct}%`, color: barColor, tooltip: 'Calibrated multi-engine score (Temperature Scaling + weighted voting across all engines). This is the headline decision value.' },
                   { label: 'AI Model Probability', value: `${((result.phishing_probability ?? 0) * 100).toFixed(1)}%`, color: result.phishing_probability >= 0.6 ? 'var(--danger)' : result.phishing_probability >= 0.3 ? 'var(--warning)' : 'var(--success)', tooltip: 'Raw Gated-Fusion output (sigmoid of temperature-scaled logits), before multi-engine weighting.' },
+                  { label: 'Threat Intelligence', value: (() => {
+                    const t = result.threat_match
+                    if (!t) return 'No known match'
+                    return `${t.value} (${t.source || t.layer || 'feed'})`
+                  })(), color: result.threat_match ? 'var(--danger)' : 'var(--text-muted)', tooltip: 'Known-threat database / blocklist / community feed match. A strong signal that never overrides the aggregate score.' },
+                  { label: 'Scan Duration', value: formatLatency(result.latency_ms) || 'N/A', color: 'var(--text-primary)', tooltip: 'Total backend analysis time for this scan (DNS + SSL + model inference + engines).' },
                   { label: 'Confidence Range', value: (() => {
                     const b = result.probability_band
                     if (!b || b.low == null) return 'N/A'

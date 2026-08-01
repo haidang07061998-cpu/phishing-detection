@@ -7,6 +7,12 @@ const VERDICT_COLORS = {
   phishing: 'var(--danger)',
 }
 
+function formatLatency(ms) {
+  if (ms == null || Number.isNaN(Number(ms))) return '–'
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  return `${(ms / 1000).toFixed(2)} s`
+}
+
 function VerdictBadge({ verdict }) {
   const color = VERDICT_COLORS[verdict] || 'var(--text-muted)'
   return (
@@ -26,12 +32,13 @@ function ReportsPanel() {
   const [filter, setFilter] = useState('')
   const [newThreat, setNewThreat] = useState('')
   const [adminKey, setAdminKey] = useState('')
+  const [keyEntered, setKeyEntered] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (key) => {
     setError('')
     try {
       const apiUrl = getApiUrl()
-      const h = getApiHeaders()
+      const h = getApiHeaders({}, key)
       const [hist, thr] = await Promise.all([
         fetch(`${apiUrl}/history?limit=50`, { headers: h }).then(r => r.json()),
         fetch(`${apiUrl}/threat`, { headers: h }).then(r => r.json()),
@@ -48,13 +55,25 @@ function ReportsPanel() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  // Reports require a runtime-entered reports/admin key — never the bundled key.
+  useEffect(() => {
+    if (keyEntered && adminKey.trim()) load(adminKey.trim())
+  }, [keyEntered, adminKey, load])
+
+  const handleKeySubmit = (e) => {
+    e.preventDefault()
+    if (!adminKey.trim()) {
+      setError('Enter a reports-scoped API key to view reports.')
+      return
+    }
+    setKeyEntered(true)
+  }
 
   const exportData = async (fmt) => {
     setError('')
     try {
       const apiUrl = getApiUrl()
-      const res = await fetch(`${apiUrl}/history/export?format=${fmt}`, { headers: getApiHeaders() })
+      const res = await fetch(`${apiUrl}/history/export?format=${fmt}`, { headers: getApiHeaders({}, adminKey.trim()) })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         setError(d.error || 'Export failed')
@@ -93,7 +112,7 @@ function ReportsPanel() {
         return
       }
       setNewThreat('')
-      load()
+      load(adminKey.trim())
     } catch (err) {
       setError(friendlyError(err))
     }
@@ -109,7 +128,7 @@ function ReportsPanel() {
       await fetch(`${apiUrl}/threat`, {
         method: 'DELETE', headers: getApiHeaders({}, adminKey.trim()), body: JSON.stringify({ value }),
       })
-      load()
+      load(adminKey.trim())
     } catch (err) {
       setError(friendlyError(err))
     }
@@ -123,6 +142,36 @@ function ReportsPanel() {
 
   return (
     <div style={{ width: '100%', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* Reports access key gate — reports never use the bundled VITE_API_KEY */}
+      <form onSubmit={handleKeySubmit} style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem 1.25rem',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '220px' }}>
+            <label htmlFor="reports-key" style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+              Reports API Key (reports or admin scope)
+            </label>
+            <input
+              id="reports-key"
+              type="password" value={adminKey} onChange={(e) => { setAdminKey(e.target.value); setKeyEntered(false) }}
+              placeholder="Enter a reports/admin-scoped key — held in memory only" aria-label="Reports API key"
+              autoComplete="off"
+              style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.78rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)', outline: 'none' }}
+            />
+          </div>
+          <button type="submit" disabled={!adminKey.trim()} style={{
+            padding: '0.4rem 1rem', fontSize: '0.78rem', borderRadius: '6px', border: 'none',
+            background: keyEntered ? 'var(--success)' : 'var(--accent)', color: '#fff', cursor: 'pointer', fontWeight: 600, alignSelf: 'flex-end',
+          }}>
+            {keyEntered ? '\u2713 Connected' : 'Load Reports'}
+          </button>
+        </div>
+        <p style={{ margin: '0.5rem 0 0', color: 'var(--text-muted)', fontSize: '0.7rem', lineHeight: '1.4' }}>
+          Scan history and the threat database are sensitive. Reports never use the build-time
+          <code> VITE_API_KEY</code> — enter a <code>reports</code>- or <code>admin</code>-scoped registry key here.
+          It is used for these calls only and never persisted.
+        </p>
+      </form>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.9rem 1rem' }}>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Scans</p>
@@ -179,6 +228,7 @@ function ReportsPanel() {
                   <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>Target</th>
                   <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>Verdict</th>
                   <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>Score</th>
+                  <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>Latency</th>
                   <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>Quality</th>
                   <th style={{ padding: '0.35rem 0.5rem', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>Threat DB</th>
                 </tr>
@@ -194,6 +244,7 @@ function ReportsPanel() {
                     </td>
                     <td style={{ padding: '0.35rem 0.5rem' }}><VerdictBadge verdict={r.verdict} /></td>
                     <td style={{ padding: '0.35rem 0.5rem', color: VERDICT_COLORS[r.verdict] || 'var(--text-primary)', fontWeight: 600 }}>{r.aggregate_score != null ? `${r.aggregate_score}/100` : '–'}</td>
+                    <td style={{ padding: '0.35rem 0.5rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatLatency(r.latency_ms)}</td>
                     <td style={{ padding: '0.35rem 0.5rem', color: 'var(--text-muted)' }}>{r.analysis_quality || '–'}</td>
                     <td style={{ padding: '0.35rem 0.5rem', color: r.threat_db_hit ? 'var(--danger)' : 'var(--text-muted)' }}>
                       {r.threat_db_hit ? 'HIT' : '–'}
@@ -210,21 +261,10 @@ function ReportsPanel() {
         <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', color: 'var(--text-bright)', fontWeight: 600 }}>
           Known-Threat Database
         </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
-          <label htmlFor="admin-key" style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600 }}>
-            Admin API Key (for blocklist changes only)
-          </label>
-          <input
-            id="admin-key"
-            type="password" value={adminKey} onChange={(e) => setAdminKey(e.target.value)}
-            placeholder="Admin-scoped key — kept in memory only, never bundled" aria-label="Admin API key"
-            autoComplete="off"
-            style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.78rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)', outline: 'none' }}
-          />
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-            Adding/removing blocklist entries requires an <code>admin</code>-scoped key. It is used for these calls only and never persisted. The build-time <code>VITE_API_KEY</code> must be a low-privilege key (scan/feedback/reports) — never an admin or env key.
-          </p>
-        </div>
+        <p style={{ margin: '0 0 0.75rem', color: 'var(--text-muted)', fontSize: '0.72rem', lineHeight: '1.5' }}>
+          Adding/removing blocklist entries requires an <code>admin</code>-scoped key — the same key entered above.
+          With a <code>reports</code>-only key the list is read-only.
+        </p>
         <form onSubmit={addThreat} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <input
             type="text" value={newThreat} onChange={(e) => setNewThreat(e.target.value)}

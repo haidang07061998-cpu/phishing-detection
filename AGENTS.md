@@ -188,7 +188,7 @@ docker-compose up --build
 - `GET /history/export?format=csv|json` → full export
 - `GET /threat` → blocklist entries (local + community), `POST /threat` → add, `DELETE /threat` → remove (admin scope)
 - `GET /whitelist` → list, `POST /whitelist` → add, `DELETE /whitelist` → remove (admin scope for write)
-- Frontend `Reports` tab (`ReportsPanel.jsx`) shows summary cards, filterable history table, JSON/CSV export (via authenticated fetch + blob download), and blocklist add/remove.
+- Frontend `Reports` tab (`ReportsPanel.jsx`) shows summary cards, filterable history table, JSON/CSV export (via authenticated fetch + blob download), and blocklist add/remove. Reports data is gated behind a **runtime-entered reports/admin key** (memory only) — the bundled `VITE_API_KEY` must NOT have the reports scope.
 
 ## API Key Management
 `api/security.py` supports two key sources:
@@ -198,7 +198,6 @@ docker-compose up --build
 - Auth is a no-op only when auth is disabled AND the registry is empty. Scope checks return 403; missing/invalid keys return 401.
 - **Fail-fast**: `PHISHGUARD_ENV=production` → `config.ensure_production_auth()` raises RuntimeError at `api/app.py` import (before model load) unless env keys or a pre-seeded registry exist. `docker-compose.yml` defaults `PHISHGUARD_ENV=production`.
 - **X-Forwarded-For không tin mù**: `_client_ip()` chỉ dùng `request.remote_addr`. Header `X-Forwarded-For` được tôn trọng duy nhất khi `PHISHGUARD_TRUST_PROXY>=1` — `api/app.py` bọc `werkzeug ProxyFix(x_for=N, x_proto=N)` để xác thực chuỗi proxy tin cậy. Mặc định `0` → client không thể spoof IP để bypass rate limit / IP allowlist.
-
 ## Temperature Scaling
 `DEFAULT_TEMPERATURE = 2.8` in `predictor.py`. Precedence: `PHISHGUARD_TEMPERATURE` env → `data/models/temperature.json` (tạo bởi `src/evaluation/calibrate.py`) → default 2.8. Applied to logits before sigmoid: `logits /= self.temperature`.
 
@@ -238,6 +237,7 @@ New fields in `/predict` response:
 - `explanation`: { verdict_summary, key_findings[], risk_factors[], recommendations[] }
 - `analysis_quality`: "full" | "limited" + `analysis_reason` (machine-readable limited-analysis flag)
 - `model_name`, `ensemble_folds`, `temperature`: which checkpoint(s)/config produced the result
+- `latency_ms`: total backend analysis time (DNS + SSL + model + engines) for this scan — also persisted in scan history
 
 ## Frontend Changes
 - Gauge uses calibrated `aggregate_score` instead of raw sigmoid
@@ -248,6 +248,9 @@ New fields in `/predict` response:
 - DetailsTab shows Subdomain Note warning when subdomain != registered domain
 - BehaviorTab shows warning banner when html_provided=false
 - OverviewTab shows amber "Limited Analysis" badge when analysis_quality !== 'full'
+- OverviewTab now shows a combined Limited Analysis banner when ANY of HTML/DNS/SSL is missing (getMissingSources), plus a `ScoreLegend` explaining the difference between AI probability, aggregate risk score, and threat-intelligence match.
+- Analysis Details table shows Scan Duration (latency_ms), Threat Intelligence match, AI Model Probability, and Aggregate Risk Score as separate rows with tooltips.
+- Scan flow supports Cancel (AbortController via apiFetch signal), Retry button on error, 90s request timeout, and a live elapsed-time indicator while scanning.
 - "AI Confidence" → "Risk Score" label with temperature scaling tooltip
 
 ## Class Imbalance

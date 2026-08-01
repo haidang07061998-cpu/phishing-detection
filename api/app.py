@@ -174,6 +174,7 @@ def predict():
             "engine_count": result.get("engine_count"),
             "analysis_quality": result.get("analysis_quality"),
             "whitelisted": result.get("whitelisted"),
+            "latency_ms": result.get("latency_ms"),
         })
         return jsonify(result)
     except Exception as e:
@@ -255,6 +256,7 @@ def domain_lookup():
             "aggregate_score": result.get("aggregate_score"),
             "verdict": "phishing" if result.get("aggregate_score", 0) >= 60 else "suspicious" if result.get("aggregate_score", 0) >= 30 else "safe",
             "engine_count": result.get("engine_count"),
+            "latency_ms": result.get("latency_ms"),
         })
         return jsonify(result)
     except Exception as e:
@@ -285,6 +287,7 @@ def ip_lookup():
             "aggregate_score": result.get("aggregate_score"),
             "verdict": "phishing" if result.get("aggregate_score", 0) >= 60 else "suspicious" if result.get("aggregate_score", 0) >= 30 else "safe",
             "engine_count": result.get("engine_count"),
+            "latency_ms": result.get("latency_ms"),
         })
         return jsonify(result)
     except Exception as e:
