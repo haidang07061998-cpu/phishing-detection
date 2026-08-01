@@ -170,27 +170,27 @@ function formatDetailValue(key, value, extra) {
 
 function getDetailColor(key, value, extra) {
   if (value === -1 || value === '' || value === undefined) return 'var(--text-muted)'
-  if (key === 'ssl_valid') return value === 1 ? '#10b981' : '#ef4444'
+  if (key === 'ssl_valid') return value === 1 ? 'var(--success)' : 'var(--danger)'
   if (key === 'ssl_issuer_trusted') {
     const trusted = value === 1 || extra?.trustedCAOverride
-    return trusted ? '#10b981' : '#eab308'
+    return trusted ? 'var(--success)' : 'var(--warning)'
   }
   if (key === 'domain_age_days') {
-    if (value < 30) return '#ef4444'
-    if (value < 365) return '#eab308'
-    return '#10b981'
+    if (value < 30) return 'var(--danger)'
+    if (value < 365) return 'var(--warning)'
+    return 'var(--success)'
   }
-  if (key === 'redirect_count') return value > 4 ? '#ef4444' : value > 2 ? '#eab308' : 'var(--text-primary)'
+  if (key === 'redirect_count') return value > 4 ? 'var(--danger)' : value > 2 ? 'var(--warning)' : 'var(--text-primary)'
   if (key === 'cross_domain_redirect') {
-    if (value !== 1) return '#10b981'
+    if (value !== 1) return 'var(--success)'
     const dest = extra?.finalUrl || ''
     const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d))
-    return isKnown ? '#10b981' : '#ef4444'
+    return isKnown ? 'var(--success)' : 'var(--danger)'
   }
   if (key === 'is_privacy_protected') return 'var(--text-secondary)'
   if (key === 'ttl') {
     if (value < 300 && extra?.whitelisted) return 'var(--text-primary)'
-    if (value < 300) return '#eab308'
+    if (value < 300) return 'var(--warning)'
     return 'var(--text-primary)'
   }
   if (key === 'asn_description') return 'var(--text-primary)'
@@ -201,19 +201,19 @@ function getDetailColor(key, value, extra) {
 
 function getDetailBadge(key, value, extra) {
   if (key === 'domain_age_days' && value >= 0) {
-    if (value < 30) return { text: 'New Domain \u00B7 High Risk', color: '#ef4444', bg: '#2a1515' }
-    if (value < 365) return { text: 'Young Domain \u00B7 Suspicious', color: '#eab308', bg: '#2a2415' }
-    return { text: 'Established \u00B7 Safe', color: '#10b981', bg: '#142a15' }
+    if (value < 30) return { text: 'New Domain \u00B7 High Risk', color: 'var(--danger)', bg: 'var(--danger-bg)' }
+    if (value < 365) return { text: 'Young Domain \u00B7 Suspicious', color: 'var(--warning)', bg: 'var(--warning-bg)' }
+    return { text: 'Established \u00B7 Safe', color: 'var(--success)', bg: 'var(--success-bg)' }
   }
   if (key === 'ttl' && value >= 0) {
     if (value < 300 && extra?.whitelisted) return { text: 'Low TTL (CDN/Load Balancing)', color: 'var(--text-primary)', bg: 'var(--bg-page)' }
-    if (value < 300) return { text: 'Low TTL \u00B7 Suspicious', color: '#eab308', bg: '#2a2415' }
+    if (value < 300) return { text: 'Low TTL \u00B7 Suspicious', color: 'var(--warning)', bg: 'var(--warning-bg)' }
   }
   if (key === 'cross_domain_redirect') {
     if (value !== 1) {
       return {
         text: 'No',
-        color: '#10b981',
+        color: 'var(--success)',
         bgColor: 'rgba(16, 185, 129, 0.1)',
         borderColor: 'rgba(16, 185, 129, 0.4)',
       }
@@ -223,14 +223,14 @@ function getDetailBadge(key, value, extra) {
     if (isKnown) {
       return {
         text: 'Yes (Reputable Destination)',
-        color: '#eab308',
+        color: 'var(--warning)',
         bgColor: 'rgba(234, 179, 8, 0.1)',
         borderColor: 'rgba(234, 179, 8, 0.4)',
       }
     }
     return {
       text: 'Yes (Unknown Destination)',
-      color: '#ef4444',
+      color: 'var(--danger)',
       bgColor: 'rgba(239, 68, 68, 0.1)',
       borderColor: 'rgba(239, 68, 68, 0.4)',
     }
@@ -257,19 +257,21 @@ function Gauge({ value, whitelisted }) {
   const r = 85, cx = 102, cy = 96, stroke = 12
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - pct / 100)
-  const color = pct >= 60 ? '#ef4444' : pct >= 30 ? '#eab308' : '#10b981'
+  const color = pct >= 60 ? 'var(--danger)' : pct >= 30 ? 'var(--warning)' : 'var(--success)'
   const label = pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE'
   return (
     <div style={{ textAlign: 'center' }}>
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct.toFixed(0)} aria-label={`Risk score ${pct.toFixed(0)} percent, ${label.toLowerCase()}`}>
       <svg width="204" height="130" viewBox="0 0 204 130" style={{ display: 'block', margin: '0 auto' }}>
-        <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke="#1a2332" strokeWidth={stroke} strokeLinecap="round" />
+        <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke="var(--bg-tab)" strokeWidth={stroke} strokeLinecap="round" />
         <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke={color} strokeWidth={stroke}
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
-        <text x={cx} y={cy - 2} textAnchor="middle" fill="#fff" fontSize="32" fontWeight="bold">{pct.toFixed(0)}%</text>
+        <text x={cx} y={cy - 2} textAnchor="middle" fill="var(--text-bright)" fontSize="32" fontWeight="bold">{pct.toFixed(0)}%</text>
         <text x={cx} y={cy + 24} textAnchor="middle" fill={color} fontSize="12" fontWeight="700">{label}</text>
       </svg>
+      </div>
       {whitelisted && (
-        <span style={{ color: '#10b981', fontSize: '0.65rem', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+        <span style={{ color: 'var(--success)', fontSize: '0.65rem', fontWeight: 600, display: 'block', marginTop: '2px' }}>
           {'Reputable \u00B7 Analysis Performed'}
         </span>
       )}
@@ -335,12 +337,12 @@ function FeatureImportanceChart({ importance }) {
               <div style={{ flex: 1, height: '16px', background: 'var(--bg-page)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
                 <div style={{
                   width: `${pct}%`, height: '100%',
-                  background: isPositive ? '#ef4444' : '#10b981',
+                  background: isPositive ? 'var(--danger)' : 'var(--success)',
                   borderRadius: '4px', float: isPositive ? 'left' : 'right',
                   opacity: 0.8, transition: 'width 0.4s ease',
                 }} />
               </div>
-              <span style={{ color: isPositive ? '#ef4444' : '#10b981', fontSize: '0.72rem', fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>
+              <span style={{ color: isPositive ? 'var(--danger)' : 'var(--success)', fontSize: '0.72rem', fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>
                 {val.toFixed(3)}
               </span>
             </div>
@@ -364,13 +366,18 @@ function TooltipIcon({ text }) {
 
 function TabButton({ active, onClick, children }) {
   return (
-    <button onClick={onClick} style={{
-      padding: '0.4rem 1rem', borderRadius: '6px', border: 'none',
-      background: active ? '#3b82f6' : 'transparent',
-      color: active ? '#fff' : 'var(--text-secondary)', fontSize: '0.8rem',
-      fontWeight: active ? 600 : 400, cursor: 'pointer',
-      transition: 'all 0.15s',
-    }}>
+    <button
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      style={{
+        padding: '0.4rem 1rem', borderRadius: '6px', border: 'none',
+        background: active ? 'var(--accent)' : 'transparent',
+        color: active ? '#fff' : 'var(--text-secondary)', fontSize: '0.8rem',
+        fontWeight: active ? 600 : 400, cursor: 'pointer',
+        transition: 'all 0.15s',
+      }}
+    >
       {children}
     </button>
   )
@@ -380,21 +387,21 @@ function formatFeatureBadge(name, value, whitelisted, brandInfo) {
   const formatted = formatFeatureValue(name, value)
   if (name === 'entropy') {
     const label = value > 4.5 ? 'High \u00B7 Suspicious' : value > 3.5 ? 'Medium \u00B7 Neutral' : 'Low \u00B7 Safe'
-    const color = whitelisted ? 'var(--text-secondary)' : (value > 4.5 ? '#ef4444' : value > 3.5 ? '#eab308' : '#10b981')
+    const color = whitelisted ? 'var(--text-secondary)' : (value > 4.5 ? 'var(--danger)' : value > 3.5 ? 'var(--warning)' : 'var(--success)')
     return { text: `${formatted} \u00B7 ${label}`, color }
   }
   if (name === 'domain_length') {
     const isLong = value > 20
-    return { text: formatted, color: isLong ? '#ef4444' : '#10b981' }
+    return { text: formatted, color: isLong ? 'var(--danger)' : 'var(--success)' }
   }
   if (name === 'subdomain_count') {
     const hasBrand = brandInfo?.has_brand_impersonation
     const isHigh = value > 2 || (hasBrand && value > 0)
-    return { text: formatted, color: isHigh ? '#ef4444' : '#10b981' }
+    return { text: formatted, color: isHigh ? 'var(--danger)' : 'var(--success)' }
   }
   if (name === 'digit_ratio') {
     const isHigh = value > 0.3
-    return { text: formatted, color: isHigh ? '#ef4444' : '#10b981' }
+    return { text: formatted, color: isHigh ? 'var(--danger)' : 'var(--success)' }
   }
   return { text: formatted, color: null }
 }
@@ -411,7 +418,7 @@ function EngineResultRow({ name, result }) {
   const score = data.score || 0
   const verdict = data.verdict || 'safe'
   const details = data.details || 'No data'
-  const color = score >= 60 ? '#ef4444' : score >= 30 ? '#eab308' : '#10b981'
+  const color = score >= 60 ? 'var(--danger)' : score >= 30 ? 'var(--warning)' : 'var(--success)'
   const label = ENGINE_LABELS[name] || name
   return (
     <div style={{ marginBottom: '0.5rem' }}>
@@ -435,15 +442,43 @@ function ReputationSection({ reputation }) {
   const lastSeen = reputation.last_seen ? new Date(reputation.last_seen).toLocaleString() : 'N/A'
   return (
     <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)', marginTop: '0.75rem' }}>
-      <p style={{ margin: '0 0 0.35rem', color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+      <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
         Historical Reputation
       </p>
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.78rem' }}>
-        <div><span style={{ color: 'var(--text-muted)' }}>Scans: </span><span style={{ color: '#fff', fontWeight: 600 }}>{scanCount}</span></div>
-        <div><span style={{ color: 'var(--text-muted)' }}>Avg Score: </span><span style={{ color: avgScore >= 60 ? '#ef4444' : avgScore >= 30 ? '#eab308' : '#10b981', fontWeight: 600 }}>{avgScore.toFixed(1)}</span></div>
-        <div><span style={{ color: 'var(--text-muted)' }}>Phishing Rate: </span><span style={{ color: phishingRate > 0.5 ? '#ef4444' : '#10b981', fontWeight: 600 }}>{(phishingRate * 100).toFixed(1)}%</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>Scans: </span><span style={{ color: 'var(--text-bright)', fontWeight: 600 }}>{scanCount}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>Avg Score: </span><span style={{ color: avgScore >= 60 ? 'var(--danger)' : avgScore >= 30 ? 'var(--warning)' : 'var(--success)', fontWeight: 600 }}>{avgScore.toFixed(1)}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>Phishing Rate: </span><span style={{ color: phishingRate > 0.5 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>{(phishingRate * 100).toFixed(1)}%</span></div>
         <div><span style={{ color: 'var(--text-muted)' }}>Last: </span><span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{lastSeen}</span></div>
       </div>
+    </div>
+  )
+}
+
+function DataCoverage({ result }) {
+  const dns = result?.dns_whois || {}
+  const ssl = result?.ssl_redirect || {}
+  const items = [
+    { key: 'dns', label: 'DNS / WHOIS', ok: Object.keys(dns).length > 0 && dns.a_record_count !== -1 && dns.a_record_count !== undefined },
+    { key: 'ssl', label: 'SSL / Redirect', ok: Object.keys(ssl).length > 0 && ssl.ssl_valid !== -1 && ssl.ssl_valid !== undefined },
+    { key: 'html', label: 'HTML / DOM', ok: !!result?.html_provided && result?.analysis_quality !== 'limited' },
+    { key: 'brand', label: 'Brand Detection', ok: !!(result?.brand_analysis && (result.brand_analysis.brands_detected || []).length > 0) },
+  ]
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem',
+    }} role="list" aria-label="Data sources used in this analysis">
+      {items.map(it => (
+        <span key={it.key} role="listitem" style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+          padding: '0.2rem 0.55rem', borderRadius: '999px', fontSize: '0.68rem', fontWeight: 600,
+          background: it.ok ? 'var(--success-bg)' : 'var(--bg-tab)',
+          color: it.ok ? 'var(--success)' : 'var(--text-muted)',
+          border: it.ok ? `1px solid var(--success-border)` : '1px solid var(--border)',
+        }}>
+          <span aria-hidden="true">{it.ok ? '\u2713' : '\u2013'}</span> {it.label}
+        </span>
+      ))}
     </div>
   )
 }
@@ -466,18 +501,21 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ flexShrink: 0 }}>
           <Gauge value={confidence} whitelisted={isWhitelisted} />
+          <div style={{ textAlign: 'center', marginTop: '0.25rem', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+            Aggregate risk score (0-100)
+          </div>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
       {!isWhitelisted && importance && <FeatureImportanceChart importance={importance} />}
       {result.analysis_quality === 'limited' && (
         <div style={{
           marginTop: '1rem', padding: '0.6rem 0.9rem', borderRadius: '8px',
-          background: '#3a2a0a', border: '1px solid #eab30844',
+          background: 'var(--warning-bg)', border: '1px solid var(--warning)44',
         }}>
-          <p style={{ margin: 0, color: '#eab308', fontSize: '0.8rem', fontWeight: 700 }}>
+          <p style={{ margin: 0, color: 'var(--warning)', fontSize: '0.8rem', fontWeight: 700 }}>
             {'\u26A0'} Limited Analysis
           </p>
-          <p style={{ margin: '0.3rem 0 0', color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.4' }}>
+          <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4' }}>
             {result.analysis_reason === 'no html content provided'
               ? 'No HTML content was submitted — behavioral (DOM/JS) signals are unavailable. Upload an HTML page for deeper analysis.'
               : (result.analysis_reason || 'The page could not be fully analyzed.')}
@@ -486,13 +524,13 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
       )}
       {isWhitelisted && (
             <div style={{
-              padding: '1rem', borderRadius: '8px', background: '#142a15',
-              border: '1px solid #10b98144', marginTop: '1rem',
+              padding: '1rem', borderRadius: '8px', background: 'var(--success-bg)',
+              border: '1px solid var(--success)44', marginTop: '1rem',
             }}>
-              <p style={{ margin: 0, color: '#10b981', fontSize: '0.85rem', fontWeight: 700 }}>
+              <p style={{ margin: 0, color: 'var(--success)', fontSize: '0.85rem', fontWeight: 700 }}>
                 {'\u2713'} Known Reputable Domain
               </p>
-              <p style={{ margin: '0.35rem 0 0', color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.4' }}>
+              <p style={{ margin: '0.35rem 0 0', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4' }}>
                 This domain is known reputable, but a full URL / brand / content analysis was still performed. The risk score reflects the analysis — reputation only lowers it, never overrides it.
               </p>
             </div>
@@ -500,34 +538,36 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
       </div>
 
+      <DataCoverage result={result} />
+
       {result.explanation && (
         <div style={{
           marginBottom: '1.25rem', padding: '1rem', borderRadius: '8px',
-          background: !isWhitelisted && confidence >= 0.6 ? '#2a1515' : !isWhitelisted && confidence >= 0.3 ? '#2a2415' : 'var(--bg-page)',
+          background: !isWhitelisted && confidence >= 0.6 ? 'var(--danger-bg)' : !isWhitelisted && confidence >= 0.3 ? 'var(--warning-bg)' : 'var(--bg-page)',
           border: `1px solid ${barColor}44`,
         }}>
           <p style={{ margin: '0 0 0.5rem', color: barColor, fontSize: '0.85rem', fontWeight: 700 }}>
             {badgeIcon} Analysis Summary
           </p>
-          <p style={{ margin: '0 0 0.75rem', color: '#e2e8f0', fontSize: '0.85rem', lineHeight: '1.6' }}>
+          <p style={{ margin: '0 0 0.75rem', color: 'var(--text-strong)', fontSize: '0.85rem', lineHeight: '1.6' }}>
             {result.explanation.verdict_summary}
           </p>
           {result.explanation.key_findings?.length > 0 && (
             <div style={{ marginBottom: '0.5rem' }}>
-              <p style={{ margin: '0 0 0.35rem', color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key Findings</p>
+              <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key Findings</p>
               {result.explanation.key_findings.map((f, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem', marginBottom: '0.2rem' }}>
                   <span style={{ color: barColor, fontSize: '0.75rem', flexShrink: 0 }}>{'\u2022'}</span>
-                  <span style={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: '1.4' }}>{f}</span>
+                  <span style={{ color: 'var(--text-soft)', fontSize: '0.78rem', lineHeight: '1.4' }}>{f}</span>
                 </div>
               ))}
             </div>
           )}
           {result.explanation.recommendations?.length > 0 && (
-            <div style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', background: '#0f172a', marginTop: '0.25rem' }}>
+            <div style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', background: 'var(--bg-subtle)', marginTop: '0.25rem' }}>
               <p style={{ margin: '0 0 0.25rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recommendations</p>
               {result.explanation.recommendations.map((r, i) => (
-                <p key={i} style={{ margin: '0 0 0.15rem', color: '#94a3b8', fontSize: '0.78rem' }}>
+                <p key={i} style={{ margin: '0 0 0.15rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
                   {i + 1}. {r}
                 </p>
               ))}
@@ -540,7 +580,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem',
       }}>
         <div>
-          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
             Morphology &amp; Characters
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -555,13 +595,13 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                 <div key={f.name} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '0.3rem 0.5rem', borderRadius: '6px',
-                  background: isRisk ? '#2a1515' : 'var(--bg-page)',
+                  background: isRisk ? 'var(--danger-bg)' : 'var(--bg-page)',
                 }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                     {label}
                     {tooltip && <TooltipIcon text={tooltip} />}
                   </span>
-                  <Badge color={color || (isRisk ? '#ef4444' : '#10b981')} bg={isRisk ? '#2a1515' : '#142a15'}>
+                  <Badge color={color || (isRisk ? 'var(--danger)' : 'var(--success)')} bg={isRisk ? 'var(--danger-bg)' : 'var(--success-bg)'}>
                     {text}
                   </Badge>
                 </div>
@@ -571,7 +611,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         </div>
 
         <div>
-          <p style={{ color: '#94a3b8', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
             Behavioral &amp; Infrastructure
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -586,13 +626,13 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                 <div key={f.name} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '0.3rem 0.5rem', borderRadius: '6px',
-                  background: isRisk ? '#2a1515' : 'var(--bg-page)',
+                  background: isRisk ? 'var(--danger-bg)' : 'var(--bg-page)',
                 }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                     {label}
                     {tooltip && <TooltipIcon text={tooltip} />}
                   </span>
-                  <Badge color={color || (isRisk ? '#ef4444' : '#10b981')} bg={isRisk ? '#2a1515' : '#142a15'}>
+                  <Badge color={color || (isRisk ? 'var(--danger)' : 'var(--success)')} bg={isRisk ? 'var(--danger-bg)' : 'var(--success-bg)'}>
                     {text}
                   </Badge>
                 </div>
@@ -601,13 +641,13 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '0.3rem 0.5rem', borderRadius: '6px',
-              background: suspTld && !isWhitelisted ? '#2a1515' : 'var(--bg-page)',
+              background: suspTld && !isWhitelisted ? 'var(--danger-bg)' : 'var(--bg-page)',
             }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
                 Suspicious TLD
                 <TooltipIcon text="Certain TLD extensions (.xyz, .top, .loan ...) are disproportionately used by phishing campaigns due to low registration cost." />
               </span>
-              <Badge color={suspTld && !isWhitelisted ? '#ef4444' : '#10b981'} bg={suspTld && !isWhitelisted ? '#2a1515' : '#142a15'}>
+              <Badge color={suspTld && !isWhitelisted ? 'var(--danger)' : 'var(--success)'} bg={suspTld && !isWhitelisted ? 'var(--danger-bg)' : 'var(--success-bg)'}>
                 {suspTld ? 'Yes' : 'No'}
               </Badge>
             </div>
@@ -623,25 +663,25 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           {brand?.has_brand_impersonation ? (
             <div style={{
               padding: '0.75rem', borderRadius: '8px',
-              background: '#2a1515', border: '1px solid #ef444444', marginBottom: '0.75rem',
+              background: 'var(--danger-bg)', border: '1px solid var(--danger)44', marginBottom: '0.75rem',
             }}>
-              <p style={{ margin: 0, color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}>
+              <p style={{ margin: 0, color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}>
                 {'\u26A0'} Brand Impersonation
               </p>
               <p style={{ margin: '0.35rem 0', color: 'var(--text-bright)', fontSize: '0.9rem', fontWeight: 600 }}>
                 {brand.brands_detected?.join(', ')}
               </p>
               {brand.contexts?.slice(0, 1).map((ctx, i) => (
-                <p key={i} style={{ margin: '0 0 0.5rem', color: '#94a3b8', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                <p key={i} style={{ margin: '0 0 0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: '1.4' }}>
                   {ctx}
                 </p>
               ))}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Risk</span>
                 <div style={{ flex: 1 }}>
-                  <ProgressBar value={brand.risk_score} color={brand.risk_score > 0.7 ? '#ef4444' : '#eab308'} height="14px" showLabel={false} />
+                  <ProgressBar value={brand.risk_score} color={brand.risk_score > 0.7 ? 'var(--danger)' : 'var(--warning)'} height="14px" showLabel={false} />
                 </div>
-                <span style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 700, minWidth: '36px', textAlign: 'right' }}>
+                <span style={{ color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 700, minWidth: '36px', textAlign: 'right' }}>
                   {(brand.risk_score * 100).toFixed(0)}%
                 </span>
               </div>
@@ -656,7 +696,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               padding: '0.75rem', borderRadius: '8px',
               background: 'var(--bg-page)', border: '1px solid var(--border)', marginBottom: '0.75rem',
             }}>
-              <p style={{ margin: 0, color: '#10b981', fontSize: '0.8rem' }}>
+              <p style={{ margin: 0, color: 'var(--success)', fontSize: '0.8rem' }}>
                 {'\u2713'} No brand impersonation detected
               </p>
             </div>
@@ -687,10 +727,17 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
               <tbody>
-                {[
-                  { label: 'Risk Score', value: `${pct}%`, color: barColor, tooltip: 'Calibrated multi-engine score (Temperature Scaling T=2.8 + weighted voting). Replaces raw sigmoid output for decision-making.' },
-                  { label: 'Reputable', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? '#10b981' : 'var(--text-muted)', tooltip: 'Known reputable domain — a soft signal only. Full URL / brand / content analysis still runs and can override it.' },
-                  { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? '#eab308' : '#10b981' },
+                {(() => {
+                  const rows = [
+                  { label: 'Aggregate Risk Score', value: `${pct}%`, color: barColor, tooltip: 'Calibrated multi-engine score (Temperature Scaling + weighted voting across all engines). This is the headline decision value.' },
+                  { label: 'AI Model Probability', value: `${((result.phishing_probability ?? 0) * 100).toFixed(1)}%`, color: result.phishing_probability >= 0.6 ? 'var(--danger)' : result.phishing_probability >= 0.3 ? 'var(--warning)' : 'var(--success)', tooltip: 'Raw Gated-Fusion output (sigmoid of temperature-scaled logits), before multi-engine weighting.' },
+                  { label: 'Confidence Range', value: (() => {
+                    const b = result.probability_band
+                    if (!b || b.low == null) return 'N/A'
+                    return `${(b.low * 100).toFixed(1)}% \u2013 ${(b.high * 100).toFixed(1)}%`
+                  })(), color: 'var(--text-primary)', tooltip: 'Approximate probability band (±1 logit std) — shows model uncertainty around the point estimate.' },
+                  { label: 'Reputable', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? 'var(--success)' : 'var(--text-muted)', tooltip: 'Known reputable domain — a soft signal only. Full URL / brand / content analysis still runs and can override it.' },
+                  { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? 'var(--warning)' : 'var(--success)' },
                   { label: 'Redirect', value: (() => {
                     const cr = result.ssl_redirect?.cross_domain_redirect
                     if (cr !== 1) return 'No'
@@ -699,27 +746,30 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                     return known ? 'To Reputable Domain' : 'Unknown Destination'
                   })(), color: (() => {
                     const cr = result.ssl_redirect?.cross_domain_redirect
-                    if (cr !== 1) return '#10b981'
+                    if (cr !== 1) return 'var(--success)'
                     const fu = (result.ssl_redirect?.final_url || '').toLowerCase()
                     const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
-                    return known ? '#eab308' : '#ef4444'
+                    return known ? 'var(--warning)' : 'var(--danger)'
                   })() },
-                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: '#10b981' },
-                  { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? '#10b981' : 'var(--text-muted)' },
+                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: 'var(--success)' },
+                  { label: 'Analysis Quality', value: result.analysis_quality === 'full' ? 'Full' : 'Limited', color: result.analysis_quality === 'full' ? 'var(--success)' : 'var(--warning)' },
+                  { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? 'var(--success)' : 'var(--text-muted)' },
                   { label: 'Features Extracted', value: `${features.length} signals`, color: 'var(--text-primary)' },
                   { label: 'Model', value: `Multi-Engine (${result.engine_count || 5})`, color: 'var(--text-primary)' },
-                  { label: 'Scan Time', value: scanTime, color: 'var(--text-muted)' },
-                ].map((row, i) => (
+                  { label: 'Analyzed At', value: result.timestamp ? new Date(result.timestamp).toLocaleString() : scanTime, color: 'var(--text-muted)' },
+                  ]
+                  return rows.map((row, i) => (
                   <tr key={i}>
-                    <td style={{ padding: '0.25rem 0.5rem 0.25rem 0', color: 'var(--text-muted)', borderBottom: i < 7 ? '1px solid var(--border)' : 'none' }}>
+                    <td style={{ padding: '0.25rem 0.5rem 0.25rem 0', color: 'var(--text-muted)', borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none' }}>
                       {row.label}
                       {row.tooltip && <TooltipIcon text={row.tooltip} />}
                     </td>
-                    <td style={{ padding: '0.25rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < 7 ? '1px solid var(--border)' : 'none', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '0.25rem 0', color: row.color, fontWeight: 600, textAlign: 'right', borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.value}
                     </td>
                   </tr>
-                ))}
+                  ))
+                })()}
               </tbody>
             </table>
           </div>
@@ -781,13 +831,13 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
           {subInfo && (
             <div style={{
               padding: '0.5rem 0.6rem', borderRadius: '6px', marginBottom: '0.25rem',
-              background: '#2a2415', border: '1px solid #eab30844',
+              background: 'var(--warning-bg)', border: '1px solid var(--warning)44',
             }}>
-              <p style={{ margin: '0 0 0.25rem', color: '#eab308', fontSize: '0.7rem', fontWeight: 700 }}>
+              <p style={{ margin: '0 0 0.25rem', color: 'var(--warning)', fontSize: '0.7rem', fontWeight: 700 }}>
                 {'\u26A0'} Subdomain Note
               </p>
-              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.72rem', lineHeight: '1.5' }}>
-                WHOIS data above belongs to <strong style={{ color: '#fff' }}>{subInfo.registered_domain}</strong>, not the subdomain <strong style={{ color: '#fff' }}>{subInfo.subdomain}</strong>. Subdomain-based phishing is a common evasion technique.
+              <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.72rem', lineHeight: '1.5' }}>
+                WHOIS data above belongs to <strong style={{ color: 'var(--text-bright)' }}>{subInfo.registered_domain}</strong>, not the subdomain <strong style={{ color: 'var(--text-bright)' }}>{subInfo.subdomain}</strong>. Subdomain-based phishing is a common evasion technique.
               </p>
             </div>
           )}
@@ -810,7 +860,7 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
   if (!htmlProvided) {
     return (
       <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
-        <p style={{ margin: '0 0 0.5rem', color: '#eab308', fontSize: '1rem', fontWeight: 700 }}>
+        <p style={{ margin: '0 0 0.5rem', color: 'var(--warning)', fontSize: '1rem', fontWeight: 700 }}>
           {'\u26A0'} HTML Content Not Provided
         </p>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
@@ -842,10 +892,10 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
               <div key={key} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '0.35rem 0.5rem', borderRadius: '6px',
-                background: isRisk ? '#2a1515' : 'var(--bg-page)',
+                background: isRisk ? 'var(--danger-bg)' : 'var(--bg-page)',
               }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{label}</span>
-                <Badge color={isRisk ? '#ef4444' : '#10b981'} bg={isRisk ? '#2a1515' : '#142a15'}>
+                <Badge color={isRisk ? 'var(--danger)' : 'var(--success)'} bg={isRisk ? 'var(--danger-bg)' : 'var(--success-bg)'}>
                   {formatted}
                 </Badge>
               </div>
@@ -868,10 +918,10 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
               <div key={key} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '0.35rem 0.5rem', borderRadius: '6px',
-                background: isRisk ? '#2a1515' : 'var(--bg-page)',
+                background: isRisk ? 'var(--danger-bg)' : 'var(--bg-page)',
               }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{label}</span>
-                <Badge color={isRisk ? '#ef4444' : '#10b981'} bg={isRisk ? '#2a1515' : '#142a15'}>
+                <Badge color={isRisk ? 'var(--danger)' : 'var(--success)'} bg={isRisk ? 'var(--danger-bg)' : 'var(--success-bg)'}>
                   {formatted}
                 </Badge>
               </div>
@@ -886,8 +936,8 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
 function DomainResult({ result }) {
   const dns = result.dns_whois
   return (
-    <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px #3b82f644' }}>
-      <div style={{ height: '5px', background: 'linear-gradient(90deg, #3b82f6, #3b82f688)' }} />
+    <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px var(--accent)44' }}>
+      <div style={{ height: '5px', background: 'linear-gradient(90deg, var(--accent), var(--accent)88)' }} />
       <div style={{ background: 'var(--bg-card)', padding: '1.5rem' }}>
         <div style={{ marginBottom: '1rem' }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -910,8 +960,8 @@ function IpResult({ result }) {
   const dns = result.dns_whois
   const ssl = result.ssl_redirect
   return (
-    <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px #3b82f644' }}>
-      <div style={{ height: '5px', background: 'linear-gradient(90deg, #3b82f6, #3b82f688)' }} />
+    <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px var(--accent)44' }}>
+      <div style={{ height: '5px', background: 'linear-gradient(90deg, var(--accent), var(--accent)88)' }} />
       <div style={{ background: 'var(--bg-card)', padding: '1.5rem' }}>
         <div style={{ marginBottom: '1rem' }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -942,9 +992,9 @@ function ResultCard({ result }) {
   const confidence = calibratedScore
   const pct = (confidence * 100).toFixed(1)
 
-  const barColor = confidence >= 0.6 ? '#ef4444' : confidence >= 0.3 ? '#eab308' : '#10b981'
-  const badgeBg = confidence >= 0.6 ? '#2a1515' : confidence >= 0.3 ? '#2a2415' : '#142a15'
-  const badgeColor = confidence >= 0.6 ? '#ef4444' : confidence >= 0.3 ? '#eab308' : '#10b981'
+  const barColor = confidence >= 0.6 ? 'var(--danger)' : confidence >= 0.3 ? 'var(--warning)' : 'var(--success)'
+  const badgeBg = confidence >= 0.6 ? 'var(--danger-bg)' : confidence >= 0.3 ? 'var(--warning-bg)' : 'var(--success-bg)'
+  const badgeColor = confidence >= 0.6 ? 'var(--danger)' : confidence >= 0.3 ? 'var(--warning)' : 'var(--success)'
   const badgeLabel = confidence >= 0.6 ? 'PHISHING' : confidence >= 0.3 ? 'SUSPICIOUS' : 'SAFE'
   const badgeIcon = confidence >= 0.6 ? '\u26A0' : '\u2713'
 
@@ -976,7 +1026,7 @@ function ResultCard({ result }) {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Analyzed URL
             </p>
-            <p style={{ margin: 0, color: '#fff', wordBreak: 'break-all', fontSize: '0.9rem', fontFamily: 'monospace' }}>
+            <p style={{ margin: 0, color: 'var(--text-bright)', wordBreak: 'break-all', fontSize: '0.9rem', fontFamily: 'monospace' }}>
               {result.url}
             </p>
           </div>
@@ -992,9 +1042,9 @@ function ResultCard({ result }) {
         {result.whitelisted && (
           <div style={{
             marginBottom: '1rem', padding: '0.5rem 0.75rem',
-            borderRadius: '8px', background: '#142a15', border: '1px solid #10b98144',
+            borderRadius: '8px', background: 'var(--success-bg)', border: '1px solid var(--success)44',
           }}>
-            <p style={{ margin: 0, color: '#10b981', fontSize: '0.8rem' }}>
+            <p style={{ margin: 0, color: 'var(--success)', fontSize: '0.8rem' }}>
               {'\u2713'} Known reputable domain — full analysis was still performed; reputation only lowers the risk estimate.
             </p>
           </div>
@@ -1003,7 +1053,7 @@ function ResultCard({ result }) {
         <div style={{
           display: 'flex', gap: '0.25rem', background: 'var(--bg-tab)',
           borderRadius: '8px', padding: '2px', marginBottom: '1rem',
-        }}>
+        }} role="tablist" aria-label="Analysis tabs">
           <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
           <TabButton active={tab === 'details'} onClick={() => setTab('details')}>Details</TabButton>
           <TabButton active={tab === 'behavior'} onClick={() => setTab('behavior')}>Behavior</TabButton>
@@ -1128,14 +1178,15 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
         }
       `}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem' }}>
-        <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.75rem', lineHeight: '1.5' }}>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: '1.5' }}>
           Ask questions about this analysis. Click a question to expand the answer.
         </p>
         {llmStatus && (
           <span style={{
             fontSize: '0.6rem', fontWeight: 600, padding: '0.15rem 0.45rem', borderRadius: '4px',
-            background: llmStatus === 'ai' ? '#166534' : '#334155',
-            color: llmStatus === 'ai' ? '#86efac' : '#cbd5e1',
+            background: llmStatus === 'ai' ? 'var(--success-bg)' : 'var(--bg-tab)',
+            color: llmStatus === 'ai' ? 'var(--success)' : 'var(--text-soft)',
+            border: llmStatus === 'ai' ? '1px solid var(--success-border)' : 'none',
             whiteSpace: 'nowrap',
           }}>
             {llmStatus === 'ai' ? 'AI Enhanced' : 'Template'}
@@ -1151,9 +1202,9 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
             border: `1px solid ${activeQuestion === i ? barColor + '44' : 'var(--border)'}`,
             transition: 'border 0.15s',
           }}>
-            <button onClick={() => handleClick(i)} style={{
+            <button onClick={() => handleClick(i)} aria-expanded={activeQuestion === i} aria-controls={`faq-answer-${i}`} style={{
               width: '100%', padding: '0.6rem 0.75rem', border: 'none', background: 'var(--bg-page)',
-              color: '#e2e8f0', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+              color: 'var(--text-strong)', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
               textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>{faq.q}</span>
@@ -1162,7 +1213,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
               </span>
             </button>
             {activeQuestion === i && (
-              <div style={{ padding: '0.6rem 0.75rem', background: '#0f172a', borderTop: '1px solid var(--border)' }}>
+              <div id={`faq-answer-${i}`} style={{ padding: '0.6rem 0.75rem', background: 'var(--bg-subtle)', borderTop: '1px solid var(--border)' }}>
                 {isLoading ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', padding: '0.1rem 0' }}>
                     <div className="skeleton-line" style={{ width: '85%', height: '0.7rem', borderRadius: '4px', background: 'var(--bg-tab)' }} />
@@ -1170,7 +1221,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
                     <div className="skeleton-line" style={{ width: '45%', height: '0.7rem', borderRadius: '4px', background: 'var(--bg-tab)' }} />
                   </div>
                 ) : (
-                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
                     <TypewriterText text={displayText} speed={10} key={llmAnswers[i] ? `llm-${i}` : `tmpl-${i}`} />
                   </p>
                 )}
@@ -1192,9 +1243,19 @@ function FeedbackButton({ result }) {
   const [submitted, setSubmitted] = useState(null)
   const [sending, setSending] = useState(false)
 
-  const sendFeedback = async (type) => {
+  const predicted = result.aggregate_score >= 60 ? 'phishing' : result.aggregate_score >= 30 ? 'suspicious' : 'safe'
+
+  const deriveType = (actual) => {
+    if (actual === predicted) return 'correct'
+    if (actual === 'safe' && predicted !== 'safe') return 'false_positive'
+    if (actual !== 'safe' && predicted === 'safe') return 'false_negative'
+    return 'correct'
+  }
+
+  const sendFeedback = async (actual) => {
     if (sending || submitted) return
     setSending(true)
+    const type = deriveType(actual)
     try {
       const apiUrl = getApiUrl()
       const res = await fetch(`${apiUrl}/feedback`, {
@@ -1203,8 +1264,8 @@ function FeedbackButton({ result }) {
         body: JSON.stringify({
           url: result.url,
           feedback_type: type,
-          predicted_verdict: result.aggregate_score >= 60 ? 'phishing' : result.aggregate_score >= 30 ? 'suspicious' : 'safe',
-          actual_verdict: type === 'false_positive' ? 'safe' : type === 'false_negative' ? 'phishing' : result.aggregate_score >= 60 ? 'phishing' : 'safe',
+          predicted_verdict: predicted,
+          actual_verdict: actual,
           score: result.aggregate_score || 0,
         }),
       })
@@ -1215,25 +1276,37 @@ function FeedbackButton({ result }) {
     setSending(false)
   }
 
+  const options = [
+    { actual: 'safe', label: 'Safe', color: 'var(--success)' },
+    { actual: 'suspicious', label: 'Suspicious', color: 'var(--warning)' },
+    { actual: 'phishing', label: 'Phishing', color: 'var(--danger)' },
+  ]
+
   return (
     <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
-      <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Was this analysis accurate?</p>
-      <div style={{ display: 'flex', gap: '0.4rem' }}>
-        {[
-          { type: 'correct', label: 'Yes, correct', color: '#10b981' },
-          { type: 'false_positive', label: 'False positive (should be safe)', color: '#eab308' },
-          { type: 'false_negative', label: 'False negative (should be phishing)', color: '#ef4444' },
-        ].map((btn) => (
-          <button key={btn.type} onClick={() => sendFeedback(btn.type)} disabled={!!submitted || sending} style={{
-            padding: '0.3rem 0.6rem', borderRadius: '6px', border: submitted === btn.type ? `1px solid ${btn.color}` : '1px solid #1e2a45',
-            background: submitted === btn.type ? btn.color + '22' : 'transparent', color: submitted === btn.type ? btn.color : 'var(--text-secondary)',
+      <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        What is the actual verdict of this page?
+      </p>
+      <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+        Our analysis says: <strong style={{ color: 'var(--text-secondary)' }}>{predicted}</strong>. Tell us what you observed on the page to improve the model.
+      </p>
+      <div style={{ display: 'flex', gap: '0.4rem' }} role="radiogroup" aria-label="Actual page verdict">
+        {options.map((btn) => (
+          <button key={btn.actual} onClick={() => sendFeedback(btn.actual)} disabled={!!submitted || sending} aria-pressed={submitted === btn.color} style={{
+            padding: '0.3rem 0.6rem', borderRadius: '6px', border: submitted ? `1px solid ${btn.color}` : '1px solid var(--border)',
+            background: submitted === btn.color ? btn.color + '22' : 'transparent', color: submitted ? btn.color : 'var(--text-secondary)',
             fontSize: '0.72rem', fontWeight: 500, cursor: submitted ? 'default' : 'pointer',
-            opacity: submitted && submitted !== btn.type ? 0.4 : 1, transition: 'all 0.15s',
+            opacity: submitted && submitted !== btn.color ? 0.4 : 1, transition: 'all 0.15s',
           }}>
-            {submitted === btn.type ? '\u2713 ' : ''}{btn.label}
+            {submitted === btn.color ? '\u2713 ' : ''}{btn.label}
           </button>
         ))}
       </div>
+      {submitted && (
+        <p style={{ margin: '0.35rem 0 0', color: 'var(--success)', fontSize: '0.7rem' }}>
+          Thanks for the feedback. {submitted === 'correct' ? 'The verdict matched your observation.' : 'This case was recorded for retraining.'}
+        </p>
+      )}
     </div>
   )
 }

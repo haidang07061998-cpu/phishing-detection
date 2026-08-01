@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
@@ -65,6 +66,11 @@ TEMPERATURE_PATH = MODEL_DIR / "temperature.json"
 # hostname is covered by that reputation (no arbitrary user-content subdomain).
 REPUTABLE_SCORE_CEILING = 15.0
 
+# Width (in raw-logit units, before temperature scaling) used to build a
+# plausible probability band around the point estimate. ~1.0 logit unit is a
+# heuristic "one standard deviation" for typical binary classifiers.
+UNCERTAINTY_LOGIT_MARGIN = 1.0
+
 
 def _load_temperature() -> float:
     """Load calibrated temperature from disk, else default.
@@ -94,9 +100,35 @@ def _load_temperature() -> float:
     return DEFAULT_TEMPERATURE
 
 
+def _utc_timestamp() -> str:
+    """RFC-3339 UTC timestamp for API responses."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _probability_band(raw_logit: float, temperature: float) -> dict:
+    """Plausible probability band around a point estimate.
+
+    The model outputs a single logit; without a full Bayesian treatment we
+    approximate an uncertainty band by pushing the logit ± one heuristic
+    logit-standard-deviation (UNCERTAINTY_LOGIT_MARGIN) through the same
+    temperature-scaled sigmoid. Used for the UI confidence display only.
+    """
+    import math
+
+    def _sig(x: float) -> float:
+        return 1.0 / (1.0 + math.exp(-x))
+
+    p = _sig(raw_logit / temperature)
+    lo = _sig((raw_logit - UNCERTAINTY_LOGIT_MARGIN) / temperature)
+    hi = _sig((raw_logit + UNCERTAINTY_LOGIT_MARGIN) / temperature)
+    return {
+        "low": round(min(p, lo), 4),
+        "high": round(max(p, hi), 4),
+    }
+
+
 def _load_fold_meta() -> dict:
     """Load per-fold normalization params from proposed_folds.json.
-
     Training normalizes URL/DOM features per fold via (x - mean) / std
     (see train_proposed.py CachedDataset). Inference MUST apply the same
     normalization or the model receives out-of-distribution inputs.
@@ -398,6 +430,7 @@ class PhishingPredictor:
                 tokens["attention_mask"].to(DEVICE),
                 dom_tensor,
             )
+            raw_logit = float(logits.detach().cpu().item())
             logits = logits / self.temperature
             prob = torch.sigmoid(logits)
             prob_val = prob.item()
@@ -462,8 +495,10 @@ class PhishingPredictor:
 
         result_dict = {
             "url": url,
+            "timestamp": _utc_timestamp(),
             "effective_url": effective_url if effective_url != url else None,
             "phishing_probability": round(prob_val, 4),
+            "probability_band": _probability_band(raw_logit, self.temperature),
             "is_phishing": final_prob >= 0.5,
             "html_provided": html_provided,
             "analysis_quality": analysis_quality,
@@ -541,6 +576,7 @@ class PhishingPredictor:
         rep = get_domain_reputation(domain)
         return {
             "domain": domain,
+            "timestamp": _utc_timestamp(),
             "dns_whois": dns_whois,
             "suspicious_tld": check_suspicious_tld(url),
             "type": "domain",
@@ -566,6 +602,7 @@ class PhishingPredictor:
         })
         return {
             "ip": ip,
+            "timestamp": _utc_timestamp(),
             "dns_whois": dns_whois,
             "ssl_redirect": ssl_redirect,
             "suspicious_tld": 0,

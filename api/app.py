@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import ipaddress
@@ -88,6 +89,25 @@ def validate_ip(ip: str) -> str | None:
 def health():
     return jsonify({"status": "ok"})
 
+
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    """Evaluation metrics for the footer cards.
+
+    Reads data/models/evaluation_results.json (written by
+    src/evaluation/evaluate.py). Falls back to empty metrics so the frontend
+    can render its built-in defaults when no evaluation has been run yet.
+    """
+    from pathlib import Path
+    results_path = Path(__file__).resolve().parents[1] / "data" / "models" / "evaluation_results.json"
+    try:
+        if not results_path.exists():
+            return jsonify({"models": []})
+        return jsonify({"models": json.loads(results_path.read_text(encoding="utf-8"))})
+    except Exception as e:
+        _logger.error("metrics read failed: %s", traceback.format_exc())
+        return jsonify({"models": []})
+
 @app.route("/health/llm", methods=["GET"])
 def health_llm():
     from api.llm_explainer import is_ollama_available
@@ -156,8 +176,10 @@ def predict_batch():
         def _run(u):
             try:
                 return predictor.predict(u)
-            except Exception as e:
-                return {"url": u, "error": str(e)}
+            except Exception:
+                # Never leak exception text to clients — log it server-side.
+                _logger.error("batch predict failed for %r: %s", u, traceback.format_exc())
+                return {"url": u, "error": "Prediction failed."}
 
         with ThreadPoolExecutor(max_workers=config.BATCH_WORKERS) as pool:
             results = list(pool.map(_run, urls))
@@ -165,8 +187,9 @@ def predict_batch():
         for url in urls:
             try:
                 results.append(predictor.predict(url))
-            except Exception as e:
-                results.append({"url": url, "error": str(e)})
+            except Exception:
+                _logger.error("batch predict failed for %r: %s", url, traceback.format_exc())
+                results.append({"url": url, "error": "Prediction failed."})
 
     for r in results:
         if "error" not in r:

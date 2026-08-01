@@ -1,10 +1,42 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import UrlInput from './components/UrlInput'
 import ResultCard from './components/ResultCard'
 import { useTheme } from './ThemeContext'
-import { getApiUrl, apiFetch } from './api'
+import { getApiUrl, apiFetch, friendlyError } from './api'
 
 const API_URL = getApiUrl()
+
+const DEFAULT_METRICS = {
+  accuracy: '97.7%',
+  accuracyLabel: 'F1 Score on Mendeley 2021',
+  auc: '0.993',
+  aucLabel: '5-Fold Cross Validation',
+  model: 'Gated Fusion',
+  modelSub: 'TabTransformer + ModernBERT',
+}
+
+function formatMetric(pct) {
+  if (pct == null || Number.isNaN(Number(pct))) return null
+  return (Number(pct) * 100).toFixed(1) + '%'
+}
+
+function pickProposedMetrics(models) {
+  if (!Array.isArray(models)) return null
+  const proposed = models.find(m =>
+    /gated|fusion|modernbert|proposed/i.test(m.model || ''))
+  const m = proposed || models[models.length - 1]
+  if (!m) return null
+  const acc = formatMetric(m.accuracy)
+  const auc = m.auc != null && !Number.isNaN(Number(m.auc)) ? Number(m.auc).toFixed(3) : null
+  return {
+    accuracy: acc,
+    accuracyLabel: 'F1 Score on Mendeley 2021',
+    auc,
+    aucLabel: '5-Fold Cross Validation',
+    model: 'Gated Fusion',
+    modelSub: 'TabTransformer + ModernBERT',
+  }
+}
 
 function SkeletonLine({ width, height }) {
   return <div className="skeleton-pulse" style={{ width: width || '60%', height: height || '0.75rem', borderRadius: '6px', background: 'var(--bg-tab)' }} />
@@ -61,7 +93,21 @@ function App() {
   const [error, setError] = useState(null)
   const [history, setHistory] = useState([])
   const [activeTab, setActiveTab] = useState('url')
+  const [metrics, setMetrics] = useState(DEFAULT_METRICS)
   const { isDark, toggle: toggleTheme } = useTheme()
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${API_URL}/metrics`, { headers: { 'Content-Type': 'application/json' } })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const live = pickProposedMetrics(data.models)
+        if (live && live.accuracy) setMetrics(live)
+      })
+      .catch(() => { /* keep defaults */ })
+    return () => { cancelled = true }
+  }, [])
 
   const TAB_CONFIG = {
     url: {
@@ -100,7 +146,7 @@ function App() {
         ...prev,
       ].slice(0, 10))
     } catch (err) {
-      setError(err.message)
+      setError(friendlyError(err))
     } finally {
       setLoading(false)
     }
@@ -155,7 +201,7 @@ function App() {
                     padding: '0.35rem 0.85rem',
                     borderRadius: '6px',
                     border: 'none',
-                    background: activeTab === tab ? '#3b82f6' : 'transparent',
+                    background: activeTab === tab ? 'var(--accent)' : 'transparent',
                     color: activeTab === tab ? '#fff' : 'var(--text-secondary)',
                     fontSize: '0.8rem',
                     fontWeight: activeTab === tab ? 600 : 400,
@@ -175,7 +221,7 @@ function App() {
               background: 'var(--bg-tab)', border: '1px solid var(--border)', borderRadius: '6px',
               padding: '0.25rem 0.5rem', cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1,
               color: 'var(--text-secondary)',
-            }} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+            }} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
               {isDark ? '\u2600' : '\uD83C\uDF19'}
             </button>
             <span style={{
@@ -202,7 +248,7 @@ function App() {
         <h1 style={{
           fontSize: '2rem',
           fontWeight: 600,
-          color: '#fff',
+          color: 'var(--text-bright)',
           margin: '0 0 0.35rem',
           textAlign: 'center',
         }}>
@@ -228,12 +274,12 @@ function App() {
         )}
 
         {error && (
-          <div style={{
-            background: '#2a1515', border: '1px solid #ef4444', borderRadius: '10px',
+          <div role="alert" style={{
+            background: 'var(--danger-bg)', border: '1px solid var(--danger)', borderRadius: '10px',
             padding: '1rem 1.25rem', width: '100%', marginTop: '1rem',
           }}>
-            <p style={{ margin: 0, fontWeight: 600, color: '#fca5a5', fontSize: '0.9rem' }}>Error</p>
-            <p style={{ margin: '0.25rem 0 0', color: '#fca5a5', fontSize: '0.85rem' }}>{error}</p>
+            <p style={{ margin: 0, fontWeight: 600, color: 'var(--danger)', fontSize: '0.9rem' }}>Error</p>
+            <p style={{ margin: '0.25rem 0 0', color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</p>
           </div>
         )}
 
@@ -247,9 +293,9 @@ function App() {
             border: '1px solid var(--border)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0, fontSize: '0.95rem', color: '#fff', fontWeight: 600 }}>Previous Checks</h3>
+              <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-bright)', fontWeight: 600 }}>Previous Checks</h3>
               <button onClick={() => setHistory([])} style={{
-                background: 'none', border: '1px solid #2a3a52', color: 'var(--text-secondary)',
+                background: 'none', border: '1px solid var(--border)', color: 'var(--text-secondary)',
                 borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.75rem',
                 cursor: 'pointer',
               }}>Clear</button>
@@ -261,14 +307,14 @@ function App() {
                   padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'var(--bg-page)',
                   fontSize: '0.8rem',
                 }}>
-                  <span style={{ color: h.phishing ? '#ef4444' : '#10b981', fontWeight: 600, marginRight: '0.5rem', flexShrink: 0 }}>
+                  <span style={{ color: h.phishing ? 'var(--danger)' : 'var(--success)', fontWeight: 600, marginRight: '0.5rem', flexShrink: 0 }}>
                     {h.phishing ? '\u26A0' : '\u2713'}
                   </span>
                   <span style={{ color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                     {h.url}
                   </span>
                   <span style={{
-                    color: h.phishing ? '#ef4444' : '#10b981', fontWeight: 600,
+                    color: h.phishing ? 'var(--danger)' : 'var(--success)', fontWeight: 600,
                     flexShrink: 0, margin: '0 0.5rem', fontSize: '0.75rem', minWidth: '42px', textAlign: 'right',
                   }}>
                     {h.prob != null ? `${h.prob.toFixed(0)}%` : ''}
@@ -302,10 +348,10 @@ function App() {
           }}>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>AI Model</p>
             <p style={{ margin: '0.35rem 0 0', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
-              Gated Fusion
+              {metrics.model}
             </p>
             <p style={{ margin: '0.15rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              TabTransformer + ModernBERT
+              {metrics.modelSub}
             </p>
           </div>
           <div style={{
@@ -313,11 +359,11 @@ function App() {
             border: '1px solid var(--border)',
           }}>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Accuracy</p>
-            <p style={{ margin: '0.35rem 0 0', color: '#10b981', fontSize: '1.3rem', fontWeight: 700 }}>
-              97.7%
+            <p style={{ margin: '0.35rem 0 0', color: 'var(--success)', fontSize: '1.3rem', fontWeight: 700 }}>
+              {metrics.accuracy}
             </p>
             <p style={{ margin: '0.15rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              F1 Score on Mendeley 2021
+              {metrics.accuracyLabel}
             </p>
           </div>
           <div style={{
@@ -325,11 +371,11 @@ function App() {
             border: '1px solid var(--border)',
           }}>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>AUC Score</p>
-            <p style={{ margin: '0.35rem 0 0', color: '#3b82f6', fontSize: '1.3rem', fontWeight: 700 }}>
-              0.993
+            <p style={{ margin: '0.35rem 0 0', color: 'var(--accent)', fontSize: '1.3rem', fontWeight: 700 }}>
+              {metrics.auc}
             </p>
             <p style={{ margin: '0.15rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              5-Fold Cross Validation
+              {metrics.aucLabel}
             </p>
           </div>
         </div>
@@ -343,7 +389,8 @@ function App() {
           100% { opacity: 0.5; }
         }
         .skeleton-pulse { animation: skeleton-shimmer 1.5s ease-in-out infinite; }
-        input:focus { box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
+        input:focus { box-shadow: var(--focus-ring); outline: none; }
+        button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         @media (max-width: 768px) {
           .hdr-tabs { width: 100%; overflow-x: auto; }
           .hdr-left { flex-wrap: wrap; gap: 0.5rem !important; width: 100%; }

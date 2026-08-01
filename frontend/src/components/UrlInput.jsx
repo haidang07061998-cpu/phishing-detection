@@ -31,11 +31,21 @@ const BUTTON_LABELS = {
   'ip address': 'LOOKUP',
 }
 
+// Must stay in sync with api/config.py MAX_HTML_BYTES (2 MiB).
+const MAX_HTML_BYTES = 2 * 1024 * 1024
+
+function formatBytes(n) {
+  if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB'
+  if (n >= 1024) return (n / 1024).toFixed(0) + ' KB'
+  return n + ' B'
+}
+
 function UrlInput({ onPredict, loading, activeTab }) {
   const [value, setValue] = useState('')
   const [htmlFile, setHtmlFile] = useState(null)
   const [fileName, setFileName] = useState('')
   const [showHtmlUpload, setShowHtmlUpload] = useState(false)
+  const [fileError, setFileError] = useState('')
   const examples = TAB_EXAMPLES[activeTab] || TAB_EXAMPLES.url
 
   const handleSubmit = (e) => {
@@ -46,7 +56,15 @@ function UrlInput({ onPredict, loading, activeTab }) {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0]
-    if (!file) { setHtmlFile(null); setFileName(''); return }
+    if (!file) { setHtmlFile(null); setFileName(''); setFileError(''); return }
+    if (file.size > MAX_HTML_BYTES) {
+      setFileError(`File is ${formatBytes(file.size)} — the maximum allowed size is ${formatBytes(MAX_HTML_BYTES)}.`)
+      setHtmlFile(null)
+      setFileName('')
+      e.target.value = ''
+      return
+    }
+    setFileError('')
     setFileName(file.name)
     const reader = new FileReader()
     reader.onload = () => setHtmlFile(reader.result)
@@ -60,6 +78,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
   const clearFile = () => {
     setHtmlFile(null)
     setFileName('')
+    setFileError('')
   }
 
   return (
@@ -74,6 +93,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={PLACEHOLDERS[activeTab] || 'Enter a URL'}
+          aria-label={PLACEHOLDERS[activeTab] || 'Enter a URL'}
           style={{
             flex: 1, padding: '0.85rem 1rem', border: 'none',
             background: 'transparent', color: 'var(--text-bright)',
@@ -85,7 +105,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
           disabled={loading || !value.trim()}
           style={{
             padding: '0.85rem 1.5rem', border: 'none',
-            background: loading ? '#1e2a45' : '#3b82f6',
+            background: loading ? 'var(--border)' : 'var(--accent)',
             color: loading ? 'var(--text-muted)' : '#fff',
             fontSize: '0.9rem', fontWeight: 700,
             cursor: loading || !value.trim() ? 'not-allowed' : 'pointer',
@@ -96,8 +116,8 @@ function UrlInput({ onPredict, loading, activeTab }) {
           {loading ? (
             <>
               <div style={{
-                width: '14px', height: '14px', border: '2px solid #64748b',
-                borderTop: '2px solid #94a3b8', borderRadius: '50%',
+                width: '14px', height: '14px', border: '2px solid var(--text-muted)',
+                borderTop: '2px solid var(--text-secondary)', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
               {BUTTON_LABELS[activeTab] === 'SCAN' ? 'SCANNING' : 'SEARCHING'}
@@ -133,7 +153,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
             onClick={() => setShowHtmlUpload(!showHtmlUpload)}
             style={{
               background: 'none', border: 'none',
-              color: showHtmlUpload ? '#3b82f6' : 'var(--text-muted)',
+              color: showHtmlUpload ? 'var(--accent)' : 'var(--text-muted)',
               fontSize: '0.8rem', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '0.3rem',
               padding: '0.3rem 0.5rem',
@@ -148,34 +168,41 @@ function UrlInput({ onPredict, loading, activeTab }) {
       </div>
 
       {showHtmlUpload && activeTab === 'url' && (
+        <>
         <div style={{
           marginTop: '0.75rem', padding: '0.75rem 1rem', borderRadius: '10px',
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', gap: '0.75rem',
         }}>
-          <input type="file" accept=".html,.htm" onChange={handleFileChange} id="html-upload" style={{ display: 'none' }} />
+          <input type="file" accept=".html,.htm" onChange={handleFileChange} id="html-upload" style={{ display: 'none' }} aria-label="Upload an HTML file for deeper analysis" />
           <label htmlFor="html-upload" style={{
             padding: '0.4rem 0.85rem', borderRadius: '6px',
             background: 'var(--bg-tab)', color: 'var(--text-primary)', fontSize: '0.8rem',
-            cursor: 'pointer', flexShrink: 0, border: '1px solid #2a3a52',
+            cursor: 'pointer', flexShrink: 0, border: '1px solid var(--border)',
           }}>
             Choose File
           </label>
           <span style={{
-            color: fileName ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '0.85rem',
+            color: fileError ? 'var(--danger)' : fileName ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '0.85rem',
             flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {fileName || 'No file selected — upload an HTML page for deeper analysis'}
+            {fileError || fileName || 'No file selected — upload an HTML page for deeper analysis'}
           </span>
           {fileName && (
-            <button type="button" onClick={clearFile} style={{
-              background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+            <button type="button" onClick={clearFile} aria-label="Remove uploaded file" style={{
+              background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer',
               fontSize: '1rem', padding: '0 0.25rem',
             }}>
               {'\u2717'}
             </button>
           )}
         </div>
+        {fileError && (
+          <p role="alert" style={{ margin: '0.35rem 0 0', color: 'var(--danger)', fontSize: '0.75rem' }}>
+            {'\u26A0'} {fileError}
+          </p>
+        )}
+        </>
       )}
     </form>
   )
