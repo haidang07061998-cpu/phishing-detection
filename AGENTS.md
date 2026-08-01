@@ -148,6 +148,10 @@ $env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.generate_figures
 $env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.deep_analysis
 # Test brand detection
 $env:PYTHONIOENCODING='utf-8'; python -m src.brand_detection
+# Calibrate temperature scaling (needs mendeley_full + checkpoints)
+$env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.calibrate
+# Benchmark predictor latency/throughput/memory
+$env:PYTHONIOENCODING='utf-8'; python -m src.evaluation.benchmark [n]
 # Docker compose
 docker-compose up --build
 ```
@@ -157,6 +161,8 @@ docker-compose up --build
 - **brand_detection/** - Brand impersonation detection via URL + text matching
 - **evaluation/generate_figures.py** - matplotlib/seaborn charts
 - **evaluation/deep_analysis.py** - Per-class metrics + error analysis
+- **evaluation/calibrate.py** - Temperature scaling on held-out test → data/models/temperature.json
+- **evaluation/benchmark.py** - Latency/throughput/memory benchmark → results/benchmark.json
 
 ## Multi-Engine Architecture
 `api/engines.py` implements 5 virtual engines with weighted voting:
@@ -169,7 +175,18 @@ docker-compose up --build
 `combine_engines()` returns `final_score` (0-100), `final_verdict`, and per-engine details. `reputation_engine()` returns `None` when the domain is not known reputable, so the engine stays out of the weighted vote for unknown domains.
 
 ## Temperature Scaling
-`TEMPERATURE = 2.8` in `predictor.py`. Applied to logits before sigmoid: `logits /= self.temperature`.
+`DEFAULT_TEMPERATURE = 2.8` in `predictor.py`. Precedence: `PHISHGUARD_TEMPERATURE` env → `data/models/temperature.json` (tạo bởi `src/evaluation/calibrate.py`) → default 2.8. Applied to logits before sigmoid: `logits /= self.temperature`.
+
+## Inference Alignment & Performance (Aug 2026)
+- **Per-fold normalization BẮT BUỘC**: training (`train_proposed.py`) và `evaluate.py` chuẩn hóa URL/DOM features per-fold bằng `(x - mean)/std`. `predictor.py` đọc `data/models/proposed_folds.json` và áp dụng đúng scaler của fold tương ứng trước inference. KHÔNG được đưa feature thô vào model (bug OOD).
+- **Token length = 128**: `MAX_SEQ_LEN = 128` trong predictor, khớp `train_proposed.py max_length=128`. Không dùng 512.
+- **Fold ensemble (opt-in)**: `PHISHGUARD_ENSEMBLE_FOLDS` (default 1). Mỗi fold model dùng scaler riêng của nó; logits được trung bình (mean) trước temperature scaling. Bật 5 cần ~1.4GB RAM (quantized) — máy 7.7GB RAM nên giữ 1.
+- **Feature importance opt-in**: `PHISHGUARD_COMPUTE_IMPORTANCE` (default True) + per-request `{"explain": bool}` override trong body POST `/predict`. Ensemble mode không tính gradient (trả vector 0).
+- **DNS/SSL extraction cache**: `_TTLCache` trong predictor (`PHISHGUARD_EXTRACT_CACHE_TTL`, default 300s). Cache kết quả DNS/WHOIS/SSL/redirect theo URL — giảm network I/O lặp.
+- **Batch workers**: `PHISHGUARD_BATCH_WORKERS` (default 1 = sequential). >1 dùng `ThreadPoolExecutor` overlap DNS/SSL I/O; model inference vẫn serialize qua `_inference_lock` nên CPU-bound forward không overlap.
+- **`analysis_quality`**: `"full"` (HTML parse thành công) hoặc `"limited"` (không HTML / parse fail) + `analysis_reason`. Frontend hiển thị badge "Limited Analysis".
+- Response thêm: `model_name`, `ensemble_folds`, `temperature`.
+- **Benchmark**: `python -m src.evaluation.benchmark [n]` → `results/benchmark.json` (p50/p95/p99 ms, throughput/min, RSS delta, timeout rate).
 
 ## Historical Reputation
 `data/cache/reputation.json` stores per-domain scan history (first_seen, last_seen, scans, avg_score, phishing_rate). Updated on every prediction.
@@ -193,6 +210,8 @@ New fields in `/predict` response:
 - `reputation`: historical scan data for the domain
 - `subdomain_info`: { full_hostname, registered_domain, subdomain, parts } — null if no subdomain
 - `explanation`: { verdict_summary, key_findings[], risk_factors[], recommendations[] }
+- `analysis_quality`: "full" | "limited" + `analysis_reason` (machine-readable limited-analysis flag)
+- `model_name`, `ensemble_folds`, `temperature`: which checkpoint(s)/config produced the result
 
 ## Frontend Changes
 - Gauge uses calibrated `aggregate_score` instead of raw sigmoid
@@ -202,6 +221,7 @@ New fields in `/predict` response:
 - OverviewTab has Analysis Summary card (natural language explanation at top)
 - DetailsTab shows Subdomain Note warning when subdomain != registered domain
 - BehaviorTab shows warning banner when html_provided=false
+- OverviewTab shows amber "Limited Analysis" badge when analysis_quality !== 'full'
 - "AI Confidence" → "Risk Score" label with temperature scaling tooltip
 
 ## Class Imbalance

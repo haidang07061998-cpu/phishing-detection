@@ -114,8 +114,12 @@ def predict():
 
     html_content = data.get("html", None)
 
+    # explain=false skips the per-request backward pass (feature importance).
+    # Defaults to the PHISHGUARD_COMPUTE_IMPORTANCE config.
+    explain = data.get("explain", None)
+
     try:
-        result = predictor.predict(url, html_content)
+        result = predictor.predict(url, html_content, explain=explain)
         dispatch("scan.completed", {
             "url": url,
             "aggregate_score": result.get("aggregate_score"),
@@ -142,11 +146,27 @@ def predict_batch():
         return jsonify({"error": f"Batch size cannot exceed {MAX_BATCH_SIZE}"}), 400
 
     results = []
-    for url in urls:
-        try:
-            results.append(predictor.predict(url.strip()))
-        except Exception as e:
-            results.append({"url": url, "error": str(e)})
+    urls = [u.strip() for u in urls]
+    if config.BATCH_WORKERS > 1 and len(urls) > 1:
+        # Parallel extraction (DNS/SSL I/O releases the GIL); model inference is
+        # serialized inside predictor via _inference_lock, so CPU-bound forward
+        # passes never overlap across threads.
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _run(u):
+            try:
+                return predictor.predict(u)
+            except Exception as e:
+                return {"url": u, "error": str(e)}
+
+        with ThreadPoolExecutor(max_workers=config.BATCH_WORKERS) as pool:
+            results = list(pool.map(_run, urls))
+    else:
+        for url in urls:
+            try:
+                results.append(predictor.predict(url))
+            except Exception as e:
+                results.append({"url": url, "error": str(e)})
 
     for r in results:
         if "error" not in r:

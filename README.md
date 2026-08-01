@@ -79,6 +79,11 @@ cd frontend && npm run dev
   "phishing_probability": 0.023,
   "is_phishing": false,
   "aggregate_score": 8.3,
+  "analysis_quality": "full",
+  "analysis_reason": "",
+  "model_name": "proposed_fold1_best.pt",
+  "ensemble_folds": 1,
+  "temperature": 2.8,
   "engine_results": {
     "final_score": 8.3,
     "final_verdict": "safe",
@@ -126,6 +131,20 @@ cd frontend && npm run dev
 - Template-based natural language generator (no LLM API)
 - Analyzes 15+ signals: brand, DNS, SSL, ASN, entropy, TLD, redirects, subdomains, reputation
 - Returns: verdict_summary, key_findings[], risk_factors[], recommendations[]
+
+### Inference Quality & Performance (`api/predictor.py`)
+Các fix alignment + hiệu năng (Aug 2026), tất cả config-driven qua env:
+
+- **Per-fold feature normalization**: training/evaluation chuẩn hóa URL/DOM features bằng `(x-mean)/std` theo fold (`train_proposed.py CachedDataset`). Predictor giờ đọc `data/models/proposed_folds.json` và áp dụng đúng scaler của fold tương ứng trước khi inference — sửa bug input OOD nghiêm trọng.
+- **Token length khớp training**: inference dùng `max_length=128` (không còn 512) — model được fine-tune trên chuỗi 128 token.
+- **Temperature calibration**: `TEMPERATURE=2.8` mặc định; nếu `data/models/temperature.json` tồn tại (tạo bởi `src/evaluation/calibrate.py`) thì dùng giá trị calibrated; env `PHISHGUARD_TEMPERATURE` override.
+- **Fold ensemble (opt-in)**: `PHISHGUARD_ENSEMBLE_FOLDS=N` average logits của N fold checkpoints. Mặc định `1` (đơn fold, RAM thấp). Bật `5` cần ~1.4GB RAM (quantized).
+- **Feature importance theo yêu cầu**: `PHISHGUARD_COMPUTE_IMPORTANCE=0` bỏ backward pass mỗi request; client có thể override per-call với `{"explain": true/false}`.
+- **DNS/SSL extraction cache**: `PHISHGUARD_EXTRACT_CACHE_TTL=300` cache kết quả DNS/WHOIS/SSL/redirect trong bộ nhớ để giảm network I/O lặp (mặc định 300s, `0` = tắt).
+- **`analysis_quality`**: `"full"` khi HTML được parse, `"limited"` khi không có HTML/parse fail — kèm `analysis_reason`.
+- **Batch workers**: `PHISHGUARD_BATCH_WORKERS>1` chạy `/predict/batch` với thread pool nhỏ (overlap DNS/SSL I/O); model inference luôn serialize qua `_inference_lock`.
+
+Benchmark: `python -m src.evaluation.benchmark [n]` → ghi `results/benchmark.json` (p50/p95/p99, throughput, RSS delta, timeout rate).
 
 ### Feedback Loop (`api/feedback.py`)
 - JSONL format (append-only, crash-safe)

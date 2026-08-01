@@ -14,6 +14,13 @@ without touching code:
 - ``PHISHGUARD_WEBHOOK_SECRET``  HMAC signing secret for webhook dispatch
 - ``PHISHGUARD_WEBHOOK_TIMEOUT`` webhook dispatch timeout (seconds)
 - ``PHISHGUARD_WEBHOOK_RETRIES`` max retry attempts for webhook dispatch
+
+Inference / scoring knobs:
+- ``PHISHGUARD_TEMPERATURE``      temperature scaling factor (default 2.8, or data/models/temperature.json)
+- ``PHISHGUARD_ENSEMBLE_FOLDS``   number of fold checkpoints to average (default 1; 5 = full ensemble)
+- ``PHISHGUARD_COMPUTE_IMPORTANCE`` compute per-request feature importance via backward pass (default True)
+- ``PHISHGUARD_EXTRACT_CACHE_TTL`` TTL seconds for DNS/SSL extraction cache (default 300; 0 = off)
+- ``PHISHGUARD_BATCH_WORKERS``    threads for /predict/batch (default 1 = sequential)
 """
 
 import os
@@ -60,3 +67,13 @@ WEBHOOK_ALLOWLIST = set(_csv("PHISHGUARD_WEBHOOK_ALLOWLIST"))
 WEBHOOK_SECRET = os.environ.get("PHISHGUARD_WEBHOOK_SECRET", "")
 WEBHOOK_TIMEOUT = float(os.environ.get("PHISHGUARD_WEBHOOK_TIMEOUT", "10"))
 WEBHOOK_MAX_RETRIES = int(os.environ.get("PHISHGUARD_WEBHOOK_RETRIES", "3"))
+
+# --------------------------------------------------------------------------
+# Inference / scoring
+# --------------------------------------------------------------------------
+
+TEMPERATURE = float(os.environ.get("PHISHGUARD_TEMPERATURE", "2.8"))
+ENSEMBLE_FOLDS = int(os.environ.get("PHISHGUARD_ENSEMBLE_FOLDS", "1"))
+COMPUTE_IMPORTANCE = os.environ.get("PHISHGUARD_COMPUTE_IMPORTANCE", "1").strip().lower() in ("1", "true", "yes", "on")
+EXTRACT_CACHE_TTL = float(os.environ.get("PHISHGUARD_EXTRACT_CACHE_TTL", "300"))
+BATCH_WORKERS = int(os.environ.get("PHISHGUARD_BATCH_WORKERS", "1"))

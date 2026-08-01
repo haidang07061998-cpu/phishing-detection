@@ -468,8 +468,23 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           <Gauge value={confidence} whitelisted={isWhitelisted} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {!isWhitelisted && importance && <FeatureImportanceChart importance={importance} />}
-          {isWhitelisted && (
+      {!isWhitelisted && importance && <FeatureImportanceChart importance={importance} />}
+      {result.analysis_quality === 'limited' && (
+        <div style={{
+          marginTop: '1rem', padding: '0.6rem 0.9rem', borderRadius: '8px',
+          background: '#3a2a0a', border: '1px solid #eab30844',
+        }}>
+          <p style={{ margin: 0, color: '#eab308', fontSize: '0.8rem', fontWeight: 700 }}>
+            {'\u26A0'} Limited Analysis
+          </p>
+          <p style={{ margin: '0.3rem 0 0', color: '#94a3b8', fontSize: '0.8rem', lineHeight: '1.4' }}>
+            {result.analysis_reason === 'no html content provided'
+              ? 'No HTML content was submitted — behavioral (DOM/JS) signals are unavailable. Upload an HTML page for deeper analysis.'
+              : (result.analysis_reason || 'The page could not be fully analyzed.')}
+          </p>
+        </div>
+      )}
+      {isWhitelisted && (
             <div style={{
               padding: '1rem', borderRadius: '8px', background: '#142a15',
               border: '1px solid #10b98144', marginTop: '1rem',

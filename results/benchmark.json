@@ -1,0 +1,26 @@
+{
+  "n": 6,
+  "n_errors": 0,
+  "errors": [],
+  "p50_ms": 12706.4,
+  "p95_ms": 36685.8,
+  "p99_ms": 36815.2,
+  "mean_ms": 19498.7,
+  "min_ms": 8909.7,
+  "max_ms": 36847.6,
+  "throughput_per_min": 3.1,
+  "rss_base_mb": 1171.6,
+  "rss_max_delta_mb": 210.5,
+  "timeout_rate": 0.0,
+  "aggregate_scores": [
+    15.2,
+    13.6,
+    10.2,
+    17.3,
+    14.2,
+    84.2
+  ],
+  "device": "cpu",
+  "temperature": 2.8,
+  "ensemble_folds": 1
+}
