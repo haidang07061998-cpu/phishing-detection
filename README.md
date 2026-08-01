@@ -181,6 +181,7 @@ Bảo mật được bật theo môi trường qua biến env (xem `api/config.p
 
 | Biến | Mặc định | Ý nghĩa |
 |------|----------|---------|
+| `PHISHGUARD_ENV` | development | `production` → **fail-fast**: API KHÔNG khởi động nếu thiếu API keys (env keys hoặc registry). `development` cho phép chạy không auth để dev |
 | `PHISHGUARD_API_KEYS` | rỗng (auth tắt) | Danh sách API key cách nhau bằng dấu phẩy. Khi đặt → mọi endpoint nhạy cảm yêu cầu header `X-API-Key` |
 | `PHISHGUARD_ALLOWED_ORIGINS` | localhost:3000 | Danh sách CORS origin được phép |
 | `PHISHGUARD_MAX_JSON_BYTES` | 2 MiB | Giới hạn kích thước body JSON (413 nếu vượt) |
@@ -193,6 +194,7 @@ Bảo mật được bật theo môi trường qua biến env (xem `api/config.p
 | `PHISHGUARD_THREAT_FEED_REFRESH_HOURS` | 24 | Chu kỳ re-fetch feed (giờ) |
 
 Các điểm đã xử lý:
+- **Fail-fast trong production**: khi `PHISHGUARD_ENV=production`, API từ chối khởi động (RuntimeError) nếu không có key nào — env keys hoặc registry (`data/api_keys.json`) — thay vì chạy công khai không auth. Kiểm tra trước khi nạp model (fail trong ~1s). `docker-compose.yml` mặc định `production` để người vận hành quên cấu hình key là fail, không im lặng mở auth.
 - **CORS hạn chế** origin theo allowlist (không còn `CORS(app)` mặc định cho phép mọi origin).
 - **API key auth** trên `/predict`, `/predict/batch`, `/domain`, `/ip`, `/feedback`, `/explain`, `/webhook`, `/whitelist` (POST/DELETE). Khi không đặt `API_KEYS`, app chạy chế độ dev không auth.
 - **Key registry** (`data/api_keys.json`): SHA-256 hash secret, scopes `admin`/`scan`/`feedback`/`reports`, expiry + IP allowlist, plaintext secret trả 1 lần khi tạo, audit `data/audit/api_keys.jsonl`. Auth là no-op chỉ khi auth tắt VÀ registry rỗng; scope check → 403, key sai → 401.

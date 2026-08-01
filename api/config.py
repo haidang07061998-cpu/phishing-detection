@@ -4,6 +4,7 @@ Central configuration for the Flask API, read from environment variables.
 All production-hardening knobs live here so they can be set at deploy time
 without touching code:
 
+- ``PHISHGUARD_ENV``            ``development`` (default) or ``production``
 - ``PHISHGUARD_API_KEYS``      comma-separated API keys; empty = auth disabled (dev)
 - ``PHISHGUARD_ALLOWED_ORIGINS`` comma-separated CORS origins
 - ``PHISHGUARD_MAX_JSON_BYTES``  max request body size
@@ -24,6 +25,34 @@ Inference / scoring knobs:
 """
 
 import os
+
+# --------------------------------------------------------------------------
+# Environment
+# --------------------------------------------------------------------------
+
+ENV = os.environ.get("PHISHGUARD_ENV", "development").strip().lower()
+IS_PRODUCTION = ENV == "production"
+
+
+def ensure_production_auth(registry_count: int = 0) -> None:
+    """Fail fast when running in production without any API keys configured.
+
+    An unauthenticated API in production silently exposes every scan, the
+    blocklist and history to the public internet. Refuse to start instead.
+
+    ``registry_count`` is the number of keys already present in the runtime
+    key registry (``data/api_keys.json``); either env keys or a pre-seeded
+    registry satisfies the requirement.
+    """
+    if not IS_PRODUCTION:
+        return
+    if not API_KEYS and registry_count == 0:
+        raise RuntimeError(
+            "API keys are required in production. Set PHISHGUARD_API_KEYS "
+            "(server-side env keys) or pre-seed the key registry "
+            "(data/api_keys.json) before starting the API."
+        )
+
 
 # --------------------------------------------------------------------------
 # Authentication

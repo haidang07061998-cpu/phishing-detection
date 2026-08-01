@@ -8,7 +8,14 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from api import config
-from api.security import rate_limit, require_api_key, reject_oversized_html
+from api.security import rate_limit, require_api_key, reject_oversized_html, _registry as _key_registry
+
+# Fail fast in production: never boot an unauthenticated API when the operator
+# forgot to configure keys (env keys or a pre-seeded runtime registry). Runs
+# BEFORE the predictor loads, so a misconfigured deploy fails in seconds
+# instead of after model weights are loaded into RAM.
+config.ensure_production_auth(registry_count=len(_key_registry()))
+
 from api.predictor import predictor
 from api.feedback import submit_feedback, get_feedback_stats
 from api.webhooks import set_webhook, delete_webhook, get_webhook, dispatch

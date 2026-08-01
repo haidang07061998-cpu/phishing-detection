@@ -9,6 +9,10 @@ services:
       - "5000:5000"
     environment:
       - PYTHONIOENCODING=utf-8
+      # Default to production so the API fails to start (fail-fast) instead of
+      # silently running WITHOUT authentication. Set PHISHGUARD_ENV=development
+      # explicitly for local dev without keys.
+      - PHISHGUARD_ENV=${PHISHGUARD_ENV:-production}
       - PHISHGUARD_API_KEYS=${PHISHGUARD_API_KEYS:-}
       - PHISHGUARD_ALLOWED_ORIGINS=${PHISHGUARD_ALLOWED_ORIGINS:-http://localhost:3000}
       - PHISHGUARD_MAX_JSON_BYTES=${PHISHGUARD_MAX_JSON_BYTES:-2097152}
