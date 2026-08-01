@@ -194,6 +194,7 @@ docker-compose up --build
 - Endpoint scopes: `scan` → `/predict`, `/predict/batch`, `/domain`, `/ip`, `/explain`; `feedback` → `/feedback`; `reports` → `/history`, `/history/export`, `/feedback/stats`; `admin` → `/keys`, `/threat` (POST/DELETE), `/whitelist` (POST/DELETE), `/webhook` (POST/DELETE). Read-only GETs (`/webhook`, `/whitelist`, `/threat`) require any valid key.
 - Auth is a no-op only when auth is disabled AND the registry is empty. Scope checks return 403; missing/invalid keys return 401.
 - **Fail-fast**: `PHISHGUARD_ENV=production` → `config.ensure_production_auth()` raises RuntimeError at `api/app.py` import (before model load) unless env keys or a pre-seeded registry exist. `docker-compose.yml` defaults `PHISHGUARD_ENV=production`.
+- **X-Forwarded-For không tin mù**: `_client_ip()` chỉ dùng `request.remote_addr`. Header `X-Forwarded-For` được tôn trọng duy nhất khi `PHISHGUARD_TRUST_PROXY>=1` — `api/app.py` bọc `werkzeug ProxyFix(x_for=N, x_proto=N)` để xác thực chuỗi proxy tin cậy. Mặc định `0` → client không thể spoof IP để bypass rate limit / IP allowlist.
 
 ## Temperature Scaling
 `DEFAULT_TEMPERATURE = 2.8` in `predictor.py`. Precedence: `PHISHGUARD_TEMPERATURE` env → `data/models/temperature.json` (tạo bởi `src/evaluation/calibrate.py`) → default 2.8. Applied to logits before sigmoid: `logits /= self.temperature`.

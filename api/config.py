@@ -82,11 +82,18 @@ MAX_JSON_BYTES = int(os.environ.get("PHISHGUARD_MAX_JSON_BYTES", str(2 * 1024 * 
 MAX_HTML_BYTES = int(os.environ.get("PHISHGUARD_MAX_HTML_BYTES", str(2 * 1024 * 1024)))   # 2 MiB
 
 # --------------------------------------------------------------------------
-# Rate limiting
+# Rate limiting / reverse proxy
 # --------------------------------------------------------------------------
 
 RATE_MIN = int(os.environ.get("PHISHGUARD_RATE_MIN", "60"))
 RATE_HOUR = int(os.environ.get("PHISHGUARD_RATE_HOUR", "600"))
+
+# When running behind a trusted reverse proxy (nginx, gunicorn, cloud LB) set
+# this to 1 (or the proxy hop count) so X-Forwarded-For is honoured ONLY after
+# werkzeug's ProxyFix validates the proxy chain. When off (default), the
+# header is ignored entirely and the TCP peer address is used — a client can
+# never spoof its own rate-limit/IP-allowlist identity.
+TRUST_PROXY = int(os.environ.get("PHISHGUARD_TRUST_PROXY", "0"))
 
 # --------------------------------------------------------------------------
 # Webhook

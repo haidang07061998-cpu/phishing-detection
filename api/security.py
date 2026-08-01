@@ -190,11 +190,12 @@ _rate_hour: dict[str, deque] = defaultdict(deque)
 
 
 def _client_ip() -> str:
-    # Honour reverse-proxy header but never trust it blindly: fall back to
-    # remote_addr when absent.
-    fwd = request.headers.get("X-Forwarded-For", "")
-    if fwd:
-        return fwd.split(",")[0].strip() or request.remote_addr or "unknown"
+    # NEVER trust X-Forwarded-For here: a client can send arbitrary values and
+    # bypass rate limiting / the IP allowlist. If the API runs behind a trusted
+    # reverse proxy, app.py installs werkzeug's ProxyFix (when
+    # PHISHGUARD_TRUST_PROXY is set), which validates the proxy chain and
+    # rewrites request.remote_addr to the real client address. Without ProxyFix
+    # we use the TCP peer address, which is not spoofable at this layer.
     return request.remote_addr or "unknown"
 
 

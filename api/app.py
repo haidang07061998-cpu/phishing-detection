@@ -27,6 +27,15 @@ app = Flask(__name__)
 CORS(app, origins=config.ALLOWED_ORIGINS or ["http://localhost:3000"])
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_JSON_BYTES
 
+# Trust X-Forwarded-For only when explicitly running behind a reverse proxy.
+# werkzeug's ProxyFix rewrites request.remote_addr from the header AFTER
+# verifying the immediate peer is the trusted proxy (based on TRUST_PROXY hop
+# count). Without this, _client_ip() uses the raw TCP peer address, so clients
+# cannot spoof their identity to bypass rate limiting or the IP allowlist.
+if config.TRUST_PROXY:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=config.TRUST_PROXY, x_proto=config.TRUST_PROXY)
+
 MAX_BATCH_SIZE = 50
 
 _logger = logging.getLogger(__name__)

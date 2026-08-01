@@ -187,6 +187,7 @@ Bảo mật được bật theo môi trường qua biến env (xem `api/config.p
 | `PHISHGUARD_MAX_JSON_BYTES` | 2 MiB | Giới hạn kích thước body JSON (413 nếu vượt) |
 | `PHISHGUARD_MAX_HTML_BYTES` | 2 MiB | Giới hạn HTML client gửi lên (413 nếu vượt) |
 | `PHISHGUARD_RATE_MIN` / `PHISHGUARD_RATE_HOUR` | 60 / 600 | Rate limit theo IP (sliding window, 429 nếu vượt) |
+| `PHISHGUARD_TRUST_PROXY` | 0 | Số hop reverse-proxy đáng tin cậy. `0` (mặc định) → **bỏ qua `X-Forwarded-For`**, dùng IP TCP peer (client không spoof được). `>=1` → bật `werkzeug ProxyFix` (x_for, x_proto) để đọc header từ proxy tin cậy |
 | `PHISHGUARD_WEBHOOK_ALLOWLIST` | rỗng (webhook tắt) | Allowlist hostname cho webhook; rỗng → webhook bị vô hiệu |
 | `PHISHGUARD_WEBHOOK_SECRET` | rỗng | HMAC-SHA256 signing key cho payload gửi webhook |
 | `PHISHGUARD_WEBHOOK_TIMEOUT` / `_RETRIES` | 10s / 3 | Timeout và số lần retry (backoff 2^n) |
@@ -200,6 +201,7 @@ Các điểm đã xử lý:
 - **Key registry** (`data/api_keys.json`): SHA-256 hash secret, scopes `admin`/`scan`/`feedback`/`reports`, expiry + IP allowlist, plaintext secret trả 1 lần khi tạo, audit `data/audit/api_keys.jsonl`. Auth là no-op chỉ khi auth tắt VÀ registry rỗng; scope check → 403, key sai → 401.
 - **Frontend key tối thiểu**: `VITE_API_KEY` trong `frontend/.env` bị đóng gói vào JS bundle nên **chỉ được dùng registry key có scope `scan` + `feedback` + `reports`** (tạo qua `POST /keys`). Tuyệt đối KHÔNG đặt `PHISHGUARD_API_KEYS` hoặc admin key vào đây — ai mở trang cũng đọc được từ bundle. Thao tác admin (sửa blocklist/webhook/whitelist) dùng admin key nhập runtime ở tab Reports, giữ trong memory, không lưu/đóng gói.
 - **Rate limiting** theo IP (in-memory sliding window; ghi chú: reset khi restart, không chia sẻ giữa multi-worker gunicorn — cần Redis nếu scale).
+- **Chống bypass rate-limit/IP-allowlist**: `_client_ip()` KHÔNG tin `X-Forwarded-For` từ client — dùng `request.remote_addr`. Chỉ khi `PHISHGUARD_TRUST_PROXY>=1` thì `ProxyFix` (werkzeug) mới đọc header sau khi xác thực proxy tin cậy.
 - **Giới hạn payload**: Flask `MAX_CONTENT_LENGTH` + HTML size cap riêng.
 - **Không lộ `str(e)`**: error handler trả `Internal server error.` chung, log traceback đầy đủ server-side.
 - **`/feedback` validate chặt**: feedback_type hợp lệ, url/verdict/comment giới hạn độ dài, score phải là số trong [-1,100], metadata là object ≤ 8 KiB.
