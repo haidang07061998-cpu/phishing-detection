@@ -196,6 +196,7 @@ Các điểm đã xử lý:
 - **CORS hạn chế** origin theo allowlist (không còn `CORS(app)` mặc định cho phép mọi origin).
 - **API key auth** trên `/predict`, `/predict/batch`, `/domain`, `/ip`, `/feedback`, `/explain`, `/webhook`, `/whitelist` (POST/DELETE). Khi không đặt `API_KEYS`, app chạy chế độ dev không auth.
 - **Key registry** (`data/api_keys.json`): SHA-256 hash secret, scopes `admin`/`scan`/`feedback`/`reports`, expiry + IP allowlist, plaintext secret trả 1 lần khi tạo, audit `data/audit/api_keys.jsonl`. Auth là no-op chỉ khi auth tắt VÀ registry rỗng; scope check → 403, key sai → 401.
+- **Frontend key tối thiểu**: `VITE_API_KEY` trong `frontend/.env` bị đóng gói vào JS bundle nên **chỉ được dùng registry key có scope `scan` + `feedback` + `reports`** (tạo qua `POST /keys`). Tuyệt đối KHÔNG đặt `PHISHGUARD_API_KEYS` hoặc admin key vào đây — ai mở trang cũng đọc được từ bundle. Thao tác admin (sửa blocklist/webhook/whitelist) dùng admin key nhập runtime ở tab Reports, giữ trong memory, không lưu/đóng gói.
 - **Rate limiting** theo IP (in-memory sliding window; ghi chú: reset khi restart, không chia sẻ giữa multi-worker gunicorn — cần Redis nếu scale).
 - **Giới hạn payload**: Flask `MAX_CONTENT_LENGTH` + HTML size cap riêng.
 - **Không lộ `str(e)`**: error handler trả `Internal server error.` chung, log traceback đầy đủ server-side.

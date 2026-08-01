@@ -25,6 +25,7 @@ function ReportsPanel() {
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('')
   const [newThreat, setNewThreat] = useState('')
+  const [adminKey, setAdminKey] = useState('')
 
   const load = useCallback(async () => {
     setError('')
@@ -77,10 +78,14 @@ function ReportsPanel() {
     e.preventDefault()
     const value = newThreat.trim()
     if (!value) return
+    if (!adminKey.trim()) {
+      setError('Admin API key required to modify the blocklist. Enter it below (it is held in memory only, never stored).')
+      return
+    }
     try {
       const apiUrl = getApiUrl()
       const res = await fetch(`${apiUrl}/threat`, {
-        method: 'POST', headers: getApiHeaders(), body: JSON.stringify({ value, source: 'manual' }),
+        method: 'POST', headers: getApiHeaders({}, adminKey.trim()), body: JSON.stringify({ value, source: 'manual' }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -95,10 +100,14 @@ function ReportsPanel() {
   }
 
   const removeThreat = async (value) => {
+    if (!adminKey.trim()) {
+      setError('Admin API key required to modify the blocklist. Enter it below (it is held in memory only, never stored).')
+      return
+    }
     try {
       const apiUrl = getApiUrl()
       await fetch(`${apiUrl}/threat`, {
-        method: 'DELETE', headers: getApiHeaders(), body: JSON.stringify({ value }),
+        method: 'DELETE', headers: getApiHeaders({}, adminKey.trim()), body: JSON.stringify({ value }),
       })
       load()
     } catch (err) {
@@ -201,6 +210,21 @@ function ReportsPanel() {
         <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', color: 'var(--text-bright)', fontWeight: 600 }}>
           Known-Threat Database
         </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
+          <label htmlFor="admin-key" style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600 }}>
+            Admin API Key (for blocklist changes only)
+          </label>
+          <input
+            id="admin-key"
+            type="password" value={adminKey} onChange={(e) => setAdminKey(e.target.value)}
+            placeholder="Admin-scoped key — kept in memory only, never bundled" aria-label="Admin API key"
+            autoComplete="off"
+            style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.78rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)', outline: 'none' }}
+          />
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+            Adding/removing blocklist entries requires an <code>admin</code>-scoped key. It is used for these calls only and never persisted. The build-time <code>VITE_API_KEY</code> must be a low-privilege key (scan/feedback/reports) — never an admin or env key.
+          </p>
+        </div>
         <form onSubmit={addThreat} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <input
             type="text" value={newThreat} onChange={(e) => setNewThreat(e.target.value)}

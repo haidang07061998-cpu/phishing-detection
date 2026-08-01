@@ -1,20 +1,26 @@
 const API_URL = import.meta.env.VITE_API_URL || '/api'
+// VITE_API_KEY is baked into the JS bundle, so it MUST be a low-privilege
+// registry key (scopes: scan + feedback + reports). NEVER put a
+// PHISHGUARD_API_KEYS env key or an 'admin'-scoped key here — anyone can read it.
 const API_KEY = import.meta.env.VITE_API_KEY || ''
 
 export function getApiUrl() {
   return API_URL
 }
 
-export function getApiHeaders(extra = {}) {
+// Pass a runtime admin key (held in memory only, never bundled) for privileged
+// calls; falls back to VITE_API_KEY when no override is given.
+export function getApiHeaders(extra = {}, apiKey = '') {
   const headers = { 'Content-Type': 'application/json', ...extra }
-  if (API_KEY) headers['X-API-Key'] = API_KEY
+  const key = apiKey || API_KEY
+  if (key) headers['X-API-Key'] = key
   return headers
 }
 
-export async function apiFetch(path, options = {}) {
+export async function apiFetch(path, options = {}, apiKey = '') {
   const opts = {
     ...options,
-    headers: getApiHeaders(options.headers || {}),
+    headers: getApiHeaders(options.headers || {}, apiKey),
   }
   const res = await fetch(`${API_URL}${path}`, opts)
   let data = null
