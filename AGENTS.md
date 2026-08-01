@@ -186,7 +186,7 @@ docker-compose up --build
 `api/history.py` appends a row to `data/scan_history.jsonl` on every predict/domain/ip scan (capped at `MAX_RECORDS = 20000` — enforced: past the cap the oldest lines are dropped down to `MAX_RECORDS - TRIM_BUFFER` so the file rewrite only happens every 500 appends).
 - `GET /history` → recent records + summary counts (total, verdicts, threat_db_hits)
 - `GET /history/export?format=csv|json` → full export
-- `GET /threat` → blocklist entries (local + community), `POST /threat` → add, `DELETE /threat` → remove (admin scope)
+- `GET /threat` → blocklist entries (local + community, `reports` scope), `GET /threat?refresh=1` → force-refresh community feed (`admin` scope), `POST /threat` → add, `DELETE /threat` → remove (admin scope)
 - `GET /whitelist` → list, `POST /whitelist` → add, `DELETE /whitelist` → remove (admin scope for write)
 - Frontend `Reports` tab (`ReportsPanel.jsx`) shows summary cards, filterable history table, JSON/CSV export (via authenticated fetch + blob download), and blocklist add/remove. Reports data is gated behind a **runtime-entered reports/admin key** (memory only) — the bundled `VITE_API_KEY` must NOT have the reports scope.
 
@@ -194,7 +194,7 @@ docker-compose up --build
 `api/security.py` supports two key sources:
 - **Env keys** (`PHISHGUARD_API_KEYS`) — legacy, always granted full `admin` scope.
 - **Registry keys** (`data/api_keys.json`, SHA-256 hashed secrets) — managed via `/keys` endpoints with scopes `admin`/`scan`/`feedback`/`reports`, optional expiry + IP allowlist. Plaintext secret returned once at creation.
-- Endpoint scopes: `scan` → `/predict`, `/predict/batch`, `/domain`, `/ip`, `/explain`; `feedback` → `/feedback`; `reports` → `/history`, `/history/export`, `/feedback/stats`; `admin` → `/keys`, `/threat` (POST/DELETE), `/whitelist` (POST/DELETE), `/webhook` (POST/DELETE). Read-only GETs (`/webhook`, `/whitelist`, `/threat`) require any valid key.
+- Endpoint scopes: `scan` → `/predict`, `/predict/batch`, `/domain`, `/ip`, `/explain`; `feedback` → `/feedback`; `reports` → `/history`, `/history/export`, `/feedback/stats`, `GET /threat`; `admin` → `/keys`, `/threat` (POST/DELETE + `GET /threat?refresh=1`), `/whitelist` (POST/DELETE), `/webhook` (POST/DELETE). Read-only GETs (`/webhook`, `/whitelist`) require any valid key; `GET /threat` requires a `reports`-scoped key.
 - Auth is a no-op only when auth is disabled AND the registry is empty. Scope checks return 403; missing/invalid keys return 401.
 - **Fail-fast**: `PHISHGUARD_ENV=production` → `config.ensure_production_auth()` raises RuntimeError at `api/app.py` import (before model load) unless env keys or a pre-seeded registry exist. `docker-compose.yml` defaults `PHISHGUARD_ENV=production`.
 - **X-Forwarded-For không tin mù**: `_client_ip()` chỉ dùng `request.remote_addr`. Header `X-Forwarded-For` được tôn trọng duy nhất khi `PHISHGUARD_TRUST_PROXY>=1` — `api/app.py` bọc `werkzeug ProxyFix(x_for=N, x_proto=N)` để xác thực chuỗi proxy tin cậy. Mặc định `0` → client không thể spoof IP để bypass rate limit / IP allowlist.

@@ -368,6 +368,7 @@ def webhook_manage():
 
 @app.route("/whitelist", methods=["GET"])
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key
 def whitelist_get():
     return jsonify(_get_whitelist())
 
@@ -437,10 +438,14 @@ def keys_revoke():
 
 @app.route("/threat", methods=["GET"])
 @rate_limit(minute=config.RATE_MIN, hour=config.RATE_HOUR)
+@require_api_key(scope="reports")
 def threat_get():
     from api.threat_db import get_all, refresh_feed
     force = request.args.get("refresh", "0") == "1"
     if force:
+        key = getattr(request, "api_key", None)
+        if key is not None and "admin" not in (key.get("scopes") or []):
+            return jsonify({"error": "This API key lacks the 'admin' scope."}), 403
         refresh_feed(force=True)
     return jsonify(get_all())
 
