@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLanguage } from '../LanguageContext'
 
 const TAB_EXAMPLES = {
   url: [
@@ -19,16 +20,16 @@ const TAB_EXAMPLES = {
   ],
 }
 
-const PLACEHOLDERS = {
-  url: 'Enter a URL to scan — paste any suspicious link',
-  domain: 'Enter a domain name — e.g. example.com',
-  'ip address': 'Enter an IP address — e.g. 8.8.8.8',
+const PLACEHOLDER_KEYS = {
+  url: 'input.placeholder.url',
+  domain: 'input.placeholder.domain',
+  'ip address': 'input.placeholder.ip',
 }
 
-const BUTTON_LABELS = {
-  url: 'SCAN',
-  domain: 'LOOKUP',
-  'ip address': 'LOOKUP',
+const BUTTON_KEYS = {
+  url: 'input.button.scan',
+  domain: 'input.button.lookup',
+  'ip address': 'input.button.lookup',
 }
 
 // Must stay in sync with api/config.py MAX_HTML_BYTES (2 MiB).
@@ -41,12 +42,15 @@ function formatBytes(n) {
 }
 
 function UrlInput({ onPredict, loading, activeTab }) {
+  const { t } = useLanguage()
   const [value, setValue] = useState('')
   const [htmlFile, setHtmlFile] = useState(null)
   const [fileName, setFileName] = useState('')
   const [showHtmlUpload, setShowHtmlUpload] = useState(false)
   const [fileError, setFileError] = useState('')
   const examples = TAB_EXAMPLES[activeTab] || TAB_EXAMPLES.url
+  const placeholder = t(PLACEHOLDER_KEYS[activeTab] || 'input.placeholder.fallback')
+  const buttonLabel = t(BUTTON_KEYS[activeTab] || 'input.button.scan')
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -58,7 +62,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
     const file = e.target.files[0]
     if (!file) { setHtmlFile(null); setFileName(''); setFileError(''); return }
     if (file.size > MAX_HTML_BYTES) {
-      setFileError(`File is ${formatBytes(file.size)} — the maximum allowed size is ${formatBytes(MAX_HTML_BYTES)}.`)
+      setFileError(t('input.fileError', { size: formatBytes(file.size), max: formatBytes(MAX_HTML_BYTES) }))
       setHtmlFile(null)
       setFileName('')
       e.target.value = ''
@@ -92,8 +96,8 @@ function UrlInput({ onPredict, loading, activeTab }) {
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={PLACEHOLDERS[activeTab] || 'Enter a URL'}
-          aria-label={PLACEHOLDERS[activeTab] || 'Enter a URL'}
+          placeholder={placeholder}
+          aria-label={placeholder}
           style={{
             flex: 1, padding: '0.85rem 1rem', border: 'none',
             background: 'transparent', color: 'var(--text-bright)',
@@ -120,11 +124,11 @@ function UrlInput({ onPredict, loading, activeTab }) {
                 borderTop: '2px solid var(--text-secondary)', borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
-              {BUTTON_LABELS[activeTab] === 'SCAN' ? 'SCANNING' : 'SEARCHING'}
+              {activeTab === 'url' ? t('input.button.scanning') : t('input.button.searching')}
             </>
           ) : (
             <>
-              {BUTTON_LABELS[activeTab] || 'SCAN'}
+              {buttonLabel}
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M4 8h8M8 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -162,7 +166,7 @@ function UrlInput({ onPredict, loading, activeTab }) {
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            + HTML file
+            {t('input.htmlUpload')}
           </button>
         )}
       </div>
@@ -174,22 +178,22 @@ function UrlInput({ onPredict, loading, activeTab }) {
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', gap: '0.75rem',
         }}>
-          <input type="file" accept=".html,.htm" onChange={handleFileChange} id="html-upload" style={{ display: 'none' }} aria-label="Upload an HTML file for deeper analysis" />
+          <input type="file" accept=".html,.htm" onChange={handleFileChange} id="html-upload" style={{ display: 'none' }} aria-label={t('input.uploadAria')} />
           <label htmlFor="html-upload" style={{
             padding: '0.4rem 0.85rem', borderRadius: '6px',
             background: 'var(--bg-tab)', color: 'var(--text-primary)', fontSize: '0.8rem',
             cursor: 'pointer', flexShrink: 0, border: '1px solid var(--border)',
           }}>
-            Choose File
+            {t('input.chooseFile')}
           </label>
           <span style={{
             color: fileError ? 'var(--danger)' : fileName ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '0.85rem',
             flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {fileError || fileName || 'No file selected — upload an HTML page for deeper analysis'}
+            {fileError || fileName || t('input.noFile')}
           </span>
           {fileName && (
-            <button type="button" onClick={clearFile} aria-label="Remove uploaded file" style={{
+            <button type="button" onClick={clearFile} aria-label={t('input.removeFile')} style={{
               background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer',
               fontSize: '1rem', padding: '0 0.25rem',
             }}>

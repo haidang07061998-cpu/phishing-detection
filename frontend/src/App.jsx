@@ -3,6 +3,7 @@ import UrlInput from './components/UrlInput'
 import ResultCard from './components/ResultCard'
 import ReportsPanel from './components/ReportsPanel'
 import { useTheme } from './ThemeContext'
+import { useLanguage } from './LanguageContext'
 import { getApiUrl, apiFetch, friendlyError } from './api'
 
 const API_URL = getApiUrl()
@@ -97,6 +98,7 @@ function App() {
   const [metrics, setMetrics] = useState(DEFAULT_METRICS)
   const [elapsedMs, setElapsedMs] = useState(0)
   const { isDark, toggle: toggleTheme } = useTheme()
+  const { t, lang, setLang } = useLanguage()
   const abortRef = useRef(null)
   const lastRequestRef = useRef(null)
 
@@ -117,7 +119,7 @@ function App() {
     url: {
       endpoint: '/predict',
       bodyKey: 'url',
-      bodyFn: (input, html) => ({ url: input, html: html || undefined }),
+      bodyFn: (input, html) => ({ url: input, html: html || undefined, lang }),
       label: 'URL',
     },
     domain: {
@@ -163,9 +165,9 @@ function App() {
       ].slice(0, 10))
     } catch (err) {
       if (err && err.name === 'AbortError') {
-        setError('Scan cancelled.')
+        setError(t('app.scanCancelled'))
       } else {
-        setError(friendlyError(err))
+        setError(friendlyError(err, t))
       }
     } finally {
       clearInterval(timer)
@@ -245,17 +247,36 @@ function App() {
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {tab}
+                  {tab === 'url' ? t('app.tab.url') : tab === 'domain' ? t('app.tab.domain') : tab === 'ip address' ? t('app.tab.ip') : t('app.tab.reports')}
                 </button>
               ))}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div role="group" aria-label="Language" style={{
+              display: 'flex', background: 'var(--bg-tab)', border: '1px solid var(--border)',
+              borderRadius: '6px', overflow: 'hidden',
+            }}>
+              {['vi', 'en'].map(code => (
+                <button
+                  key={code}
+                  onClick={() => setLang(code)}
+                  aria-pressed={lang === code}
+                  style={{
+                    padding: '0.28rem 0.6rem', border: 'none',
+                    background: lang === code ? 'var(--accent)' : 'transparent',
+                    color: lang === code ? '#fff' : 'var(--text-secondary)',
+                    fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
+                    textTransform: 'uppercase', lineHeight: 1, transition: 'all 0.15s',
+                  }}
+                >{code.toUpperCase()}</button>
+              ))}
+            </div>
             <button onClick={toggleTheme} style={{
               background: 'var(--bg-tab)', border: '1px solid var(--border)', borderRadius: '6px',
               padding: '0.25rem 0.5rem', cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1,
               color: 'var(--text-secondary)',
-            }} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+            }} title={isDark ? t('app.themeToggle.light') : t('app.themeToggle.dark')} aria-label={isDark ? t('app.themeToggle.light') : t('app.themeToggle.dark')}>
               {isDark ? '\u2600' : '\uD83C\uDF19'}
             </button>
             <span style={{
@@ -263,7 +284,7 @@ function App() {
               background: 'var(--bg-tab)', color: 'var(--text-secondary)',
               fontSize: '0.75rem', border: '1px solid var(--border)',
             }}>
-              AI Model v2.0
+              {t('app.modelVersion')}
             </span>
           </div>
         </div>
@@ -286,10 +307,10 @@ function App() {
           margin: '0 0 0.35rem',
           textAlign: 'center',
         }}>
-          {activeTab === 'url' ? 'Analyze suspicious URLs' :
-           activeTab === 'domain' ? 'Domain Intelligence Lookup' :
-           activeTab === 'ip address' ? 'IP Address Reputation' :
-           'Security Reports'}
+          {activeTab === 'url' ? t('app.hero.url.title') :
+           activeTab === 'domain' ? t('app.hero.domain.title') :
+           activeTab === 'ip address' ? t('app.hero.ip.title') :
+           t('app.hero.reports.title')}
         </h1>
         <p style={{
           color: 'var(--text-secondary)',
@@ -297,10 +318,10 @@ function App() {
           margin: '0 0 2rem',
           textAlign: 'center',
         }}>
-          {activeTab === 'url' ? 'Powered by Gated Fusion AI \u00B7 TabTransformer + ModernBERT + DOM Analysis' :
-           activeTab === 'domain' ? 'DNS records \u00B7 WHOIS data \u00B7 SSL certificate info' :
-           activeTab === 'ip address' ? 'Reverse DNS \u00B7 WHOIS lookup \u00B7 Network intelligence' :
-           'Scan history \u00B7 threat database \u00B7 data export'}
+          {activeTab === 'url' ? t('app.hero.url.subtitle') :
+           activeTab === 'domain' ? t('app.hero.domain.subtitle') :
+           activeTab === 'ip address' ? t('app.hero.ip.subtitle') :
+           t('app.hero.reports.subtitle')}
         </p>
 
         {isReportTab ? (
@@ -312,7 +333,7 @@ function App() {
           <div style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                {'\u23F3'} Analyzing&hellip; {(elapsedMs / 1000).toFixed(1)}s
+                {'\u23F3'} {t('app.analyzing', { secs: (elapsedMs / 1000).toFixed(1) })}
               </span>
               <button
                 onClick={cancelScan}
@@ -322,7 +343,7 @@ function App() {
                   cursor: 'pointer',
                 }}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
             <SkeletonResult activeTab={activeTab} />
@@ -334,7 +355,7 @@ function App() {
             background: 'var(--danger-bg)', border: '1px solid var(--danger)', borderRadius: '10px',
             padding: '1rem 1.25rem', width: '100%', marginTop: '1rem',
           }}>
-            <p style={{ margin: 0, fontWeight: 600, color: 'var(--danger)', fontSize: '0.9rem' }}>Error</p>
+            <p style={{ margin: 0, fontWeight: 600, color: 'var(--danger)', fontSize: '0.9rem' }}>{t('common.error')}</p>
             <p style={{ margin: '0.25rem 0 0.75rem', color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</p>
             {lastRequestRef.current && lastRequestRef.current.tab === activeTab && (
               <button
@@ -345,7 +366,7 @@ function App() {
                   cursor: 'pointer',
                 }}
               >
-                {'\u21BB'} Retry
+                {t('common.retry')}
               </button>
             )}
           </div>
@@ -361,12 +382,12 @@ function App() {
             border: '1px solid var(--border)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-bright)', fontWeight: 600 }}>Previous Checks</h3>
+              <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-bright)', fontWeight: 600 }}>{t('app.history.title')}</h3>
               <button onClick={() => setHistory([])} style={{
                 background: 'none', border: '1px solid var(--border)', color: 'var(--text-secondary)',
                 borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.75rem',
                 cursor: 'pointer',
-              }}>Clear</button>
+              }}>{t('app.history.clear')}</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               {history.map((h, i) => (
@@ -415,7 +436,7 @@ function App() {
             background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem 1.25rem',
             border: '1px solid var(--border)',
           }}>
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>AI Model</p>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('app.footer.model')}</p>
             <p style={{ margin: '0.35rem 0 0', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
               {metrics.model}
             </p>
@@ -427,24 +448,24 @@ function App() {
             background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem 1.25rem',
             border: '1px solid var(--border)',
           }}>
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Accuracy</p>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('app.footer.accuracy')}</p>
             <p style={{ margin: '0.35rem 0 0', color: 'var(--success)', fontSize: '1.3rem', fontWeight: 700 }}>
               {metrics.accuracy}
             </p>
             <p style={{ margin: '0.15rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              {metrics.accuracyLabel}
+              {metrics.accuracyLabel === 'F1 Score on Mendeley 2021' ? t('app.footer.f1Label') : metrics.accuracyLabel}
             </p>
           </div>
           <div style={{
             background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem 1.25rem',
             border: '1px solid var(--border)',
           }}>
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>AUC Score</p>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('app.footer.auc')}</p>
             <p style={{ margin: '0.35rem 0 0', color: 'var(--accent)', fontSize: '1.3rem', fontWeight: 700 }}>
               {metrics.auc}
             </p>
             <p style={{ margin: '0.15rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              {metrics.aucLabel}
+              {metrics.aucLabel === '5-Fold Cross Validation' ? t('app.footer.cvLabel') : metrics.aucLabel}
             </p>
           </div>
         </div>

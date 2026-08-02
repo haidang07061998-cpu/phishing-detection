@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getApiHeaders, getApiUrl } from '../api'
+import { useLanguage } from '../LanguageContext'
 
 const WHITELIST_DOMAINS = [
   'google.com', 'googleapis.com', 'googleusercontent.com',
@@ -31,34 +32,34 @@ const WHITELIST_DOMAINS = [
   'vietinbank.vn', 'bidv.com.vn',
 ]
 
-const FEATURE_LABELS = {
-  url_length: 'URL Length',
-  domain_length: 'Domain Length',
-  path_length: 'Path Length',
-  entropy: 'URL Entropy',
-  special_char_ratio: 'Special Chars Ratio',
-  digit_ratio: 'Digit Ratio',
-  subdomain_count: 'Subdomain Count',
-  has_https: 'HTTPS Enabled',
-  has_ip_address: 'IP in Domain',
-  suspicious_keywords: 'Suspicious Keywords',
-  url_depth: 'URL Depth',
-  tld_in_path: 'TLD in Path',
+const FEATURE_LABEL_KEYS = {
+  url_length: 'rc.feature.url_length',
+  domain_length: 'rc.feature.domain_length',
+  path_length: 'rc.feature.path_length',
+  entropy: 'rc.feature.entropy',
+  special_char_ratio: 'rc.feature.special_char_ratio',
+  digit_ratio: 'rc.feature.digit_ratio',
+  subdomain_count: 'rc.feature.subdomain_count',
+  has_https: 'rc.feature.has_https',
+  has_ip_address: 'rc.feature.has_ip_address',
+  suspicious_keywords: 'rc.feature.suspicious_keywords',
+  url_depth: 'rc.feature.url_depth',
+  tld_in_path: 'rc.feature.tld_in_path',
 }
 
-const FEATURE_TOOLTIPS = {
-  url_length: 'Total number of characters in the URL. Phishing URLs are often excessively long to hide malicious intent.',
-  domain_length: 'Length of the domain name. Unusually long domains can indicate subdomain tricks used by attackers.',
-  path_length: 'Number of characters in the URL path. Long paths with random segments are common in phishing links.',
-  entropy: 'Measures randomness of the URL string. High entropy suggests obfuscated or randomly generated phishing URLs.',
-  special_char_ratio: 'Proportion of special characters (@, -, _, ., etc). Phishing URLs often abuse these to mimic legitimate sites.',
-  digit_ratio: 'Proportion of digits in the URL. Phishing domains often contain random numbers to evade detection.',
-  subdomain_count: 'Number of subdomain levels. Attackers use many subdomains to hide the real domain (e.g., google.com.attacker.xyz).',
-  has_https: 'Whether the URL uses HTTPS protocol. HTTPS alone does not guarantee safety — phishing sites now widely use it.',
-  has_ip_address: 'Whether the domain is an IP address instead of a name. Legitimate services rarely use raw IP addresses.',
-  suspicious_keywords: 'Count of security-related keywords (login, verify, secure, etc). Phishing pages heavily use these to appear legitimate.',
-  url_depth: 'Number of path segments (/a/b has depth 2). Deep nested paths can hide the true nature of the destination.',
-  tld_in_path: 'Whether a top-level domain (.com, .org) appears in the path. This tricks users into misreading the URL structure.',
+const FEATURE_TOOLTIP_KEYS = {
+  url_length: 'rc.tip.url_length',
+  domain_length: 'rc.tip.domain_length',
+  path_length: 'rc.tip.path_length',
+  entropy: 'rc.tip.entropy',
+  special_char_ratio: 'rc.tip.special_char_ratio',
+  digit_ratio: 'rc.tip.digit_ratio',
+  subdomain_count: 'rc.tip.subdomain_count',
+  has_https: 'rc.tip.has_https',
+  has_ip_address: 'rc.tip.has_ip_address',
+  suspicious_keywords: 'rc.tip.suspicious_keywords',
+  url_depth: 'rc.tip.url_depth',
+  tld_in_path: 'rc.tip.tld_in_path',
 }
 
 const FEATURE_IMPORTANCE = [
@@ -67,49 +68,51 @@ const FEATURE_IMPORTANCE = [
   'domain_length', 'url_length', 'url_depth', 'path_length',
 ]
 
-const DETAIL_LABELS = {
-  a_record_count: 'A Records',
-  mx_record_count: 'MX Records',
-  ns_record_count: 'NS Records',
-  ttl: 'TTL (seconds)',
-  domain_age_days: 'Domain Age',
-  registrar: 'Registrar',
-  is_privacy_protected: 'Privacy Protected',
-  country: 'Country',
-  ssl_valid: 'SSL Valid',
-  ssl_age_days: 'SSL Age',
-  ssl_issuer_trusted: 'SSL Issuer Trusted',
-  redirect_count: 'Redirect Count',
-  cross_domain_redirect: 'Cross-Domain Redirect',
-  final_url: 'Final URL',
-  resolved_ips: 'Resolved IPs',
-  ptr_record: 'Reverse DNS (PTR)',
-  asn: 'ASN',
-  asn_description: 'ISP',
-  asn_country: 'ASN Country',
+const DETAIL_LABEL_KEYS = {
+  a_record_count: 'rc.detail.a_record_count',
+  mx_record_count: 'rc.detail.mx_record_count',
+  ns_record_count: 'rc.detail.ns_record_count',
+  ttl: 'rc.detail.ttl',
+  domain_age_days: 'rc.detail.domain_age_days',
+  registrar: 'rc.detail.registrar',
+  is_privacy_protected: 'rc.detail.is_privacy_protected',
+  country: 'rc.detail.country',
+  ssl_valid: 'rc.detail.ssl_valid',
+  ssl_age_days: 'rc.detail.ssl_age_days',
+  ssl_issuer_trusted: 'rc.detail.ssl_issuer_trusted',
+  redirect_count: 'rc.detail.redirect_count',
+  cross_domain_redirect: 'rc.detail.cross_domain_redirect',
+  final_url: 'rc.detail.final_url',
+  resolved_ips: 'rc.detail.resolved_ips',
+  ptr_record: 'rc.detail.ptr_record',
+  asn: 'rc.detail.asn',
+  asn_description: 'rc.detail.asn_description',
+  asn_country: 'rc.detail.asn_country',
 }
 
-const SIGNAL_LABELS = {
-  script_count: 'Script Tags',
-  iframe_count: 'iframes',
-  form_count: 'Forms',
-  input_count: 'Input Fields',
-  password_input: 'Password Fields',
-  button_count: 'Buttons',
-  total_links: 'Total Links',
-  external_scripts: 'External Scripts',
-  external_link_ratio: 'External Link Ratio',
-  hidden_elements: 'Hidden Elements',
-  meta_refresh: 'Meta Refresh',
-  eval_count: 'eval() Calls',
-  document_write: 'document.write()',
-  suspicious_js: 'Suspicious JS Patterns',
-  empty_links: 'Empty Links',
+const SIGNAL_LABEL_KEYS = {
+  script_count: 'rc.signal.script_count',
+  iframe_count: 'rc.signal.iframe_count',
+  form_count: 'rc.signal.form_count',
+  input_count: 'rc.signal.input_count',
+  password_input: 'rc.signal.password_input',
+  button_count: 'rc.signal.button_count',
+  total_links: 'rc.signal.total_links',
+  external_scripts: 'rc.signal.external_scripts',
+  external_link_ratio: 'rc.signal.external_link_ratio',
+  hidden_elements: 'rc.signal.hidden_elements',
+  meta_refresh: 'rc.signal.meta_refresh',
+  eval_count: 'rc.signal.eval_count',
+  document_write: 'rc.signal.document_write',
+  suspicious_js: 'rc.signal.suspicious_js',
+  empty_links: 'rc.signal.empty_links',
 }
 
-function formatFeatureValue(name, value) {
+function formatFeatureValue(name, value, t) {
+  const yes = t ? t('common.yes') : 'Yes'
+  const no = t ? t('common.no') : 'No'
   if (name === 'has_https' || name === 'has_ip_address' || name === 'tld_in_path') {
-    return value === 1 ? 'Yes' : 'No'
+    return value === 1 ? yes : no
   }
   if (name === 'suspicious_keywords' || name === 'subdomain_count' || name === 'url_depth') {
     return String(Math.round(value))
@@ -139,32 +142,35 @@ function getFeatureRisk(name, value) {
   return value > 0.5
 }
 
-function formatDetailValue(key, value, extra) {
-  if (value === -1 || value === '' || value === undefined || value === null) return 'N/A'
+function formatDetailValue(key, value, extra, t) {
+  const na = 'N/A'
+  const yes = t ? t('common.yes') : 'Yes'
+  const no = t ? t('common.no') : 'No'
+  if (value === -1 || value === '' || value === undefined || value === null) return na
   if (key === 'domain_age_days') {
-    if (value < 30) return `${value} days`
-    if (value < 365) return `${Math.round(value / 30)} months`
-    return `${(value / 365).toFixed(1)} years`
+    if (value < 30) return t ? t('rc.detail.value.days', { value }) : `${value} days`
+    if (value < 365) return t ? t('rc.detail.value.months', { value: Math.round(value / 30) }) : `${Math.round(value / 30)} months`
+    return t ? t('rc.detail.value.years', { value: (value / 365).toFixed(1) }) : `${(value / 365).toFixed(1)} years`
   }
-  if (key === 'ssl_age_days') return `${value} days`
-  if (key === 'ssl_valid') return value === 1 ? 'Yes' : 'No'
+  if (key === 'ssl_age_days') return t ? t('rc.detail.value.days', { value }) : `${value} days`
+  if (key === 'ssl_valid') return value === 1 ? yes : no
   if (key === 'ssl_issuer_trusted') {
     const trusted = value === 1 || extra?.trustedCAOverride
-    return trusted ? 'Yes' : 'No'
+    return trusted ? yes : no
   }
-  if (key === 'is_privacy_protected') return value === 1 ? 'Yes' : 'No'
+  if (key === 'is_privacy_protected') return value === 1 ? yes : no
   if (key === 'cross_domain_redirect') {
-    if (value === -1) return 'N/A'
-    return value === 1 ? 'Yes' : 'No'
+    if (value === -1) return na
+    return value === 1 ? yes : no
   }
   if (key === 'resolved_ips') {
-    if (Array.isArray(value)) return value.join(', ') || 'N/A'
+    if (Array.isArray(value)) return value.join(', ') || na
     return String(value)
   }
-  if (key === 'ptr_record') return value || 'N/A'
-  if (key === 'asn') return value ? `AS${value}` : 'N/A'
-  if (key === 'asn_description') return value || 'N/A'
-  if (key === 'asn_country') return value || 'N/A'
+  if (key === 'ptr_record') return value || na
+  if (key === 'asn') return value ? `AS${value}` : na
+  if (key === 'asn_description') return value || na
+  if (key === 'asn_country') return value || na
   return String(value)
 }
 
@@ -199,20 +205,21 @@ function getDetailColor(key, value, extra) {
   return 'var(--text-primary)'
 }
 
-function getDetailBadge(key, value, extra) {
+function getDetailBadge(key, value, extra, t) {
+  const no = t ? t('common.no') : 'No'
   if (key === 'domain_age_days' && value >= 0) {
-    if (value < 30) return { text: 'New Domain \u00B7 High Risk', color: 'var(--danger)', bg: 'var(--danger-bg)' }
-    if (value < 365) return { text: 'Young Domain \u00B7 Suspicious', color: 'var(--warning)', bg: 'var(--warning-bg)' }
-    return { text: 'Established \u00B7 Safe', color: 'var(--success)', bg: 'var(--success-bg)' }
+    if (value < 30) return { text: t ? t('rc.badge.newDomain') : 'New Domain \u00B7 High Risk', color: 'var(--danger)', bg: 'var(--danger-bg)' }
+    if (value < 365) return { text: t ? t('rc.badge.youngDomain') : 'Young Domain \u00B7 Suspicious', color: 'var(--warning)', bg: 'var(--warning-bg)' }
+    return { text: t ? t('rc.badge.established') : 'Established \u00B7 Safe', color: 'var(--success)', bg: 'var(--success-bg)' }
   }
   if (key === 'ttl' && value >= 0) {
-    if (value < 300 && extra?.whitelisted) return { text: 'Low TTL (CDN/Load Balancing)', color: 'var(--text-primary)', bg: 'var(--bg-page)' }
-    if (value < 300) return { text: 'Low TTL \u00B7 Suspicious', color: 'var(--warning)', bg: 'var(--warning-bg)' }
+    if (value < 300 && extra?.whitelisted) return { text: t ? t('rc.badge.lowTtlCdn') : 'Low TTL (CDN/Load Balancing)', color: 'var(--text-primary)', bg: 'var(--bg-page)' }
+    if (value < 300) return { text: t ? t('rc.badge.lowTtl') : 'Low TTL \u00B7 Suspicious', color: 'var(--warning)', bg: 'var(--warning-bg)' }
   }
   if (key === 'cross_domain_redirect') {
     if (value !== 1) {
       return {
-        text: 'No',
+        text: no,
         color: 'var(--success)',
         bgColor: 'rgba(16, 185, 129, 0.1)',
         borderColor: 'rgba(16, 185, 129, 0.4)',
@@ -222,14 +229,14 @@ function getDetailBadge(key, value, extra) {
     const isKnown = WHITELIST_DOMAINS.some(d => dest.includes(d.toLowerCase()))
     if (isKnown) {
       return {
-        text: 'Yes (Reputable Destination)',
+        text: t ? t('rc.badge.reputableDest') : 'Yes (Reputable Destination)',
         color: 'var(--warning)',
         bgColor: 'rgba(234, 179, 8, 0.1)',
         borderColor: 'rgba(234, 179, 8, 0.4)',
       }
     }
     return {
-      text: 'Yes (Unknown Destination)',
+      text: t ? t('rc.badge.unknownDest') : 'Yes (Unknown Destination)',
       color: 'var(--danger)',
       bgColor: 'rgba(239, 68, 68, 0.1)',
       borderColor: 'rgba(239, 68, 68, 0.4)',
@@ -253,15 +260,16 @@ function formatSignalRisk(key, value) {
 }
 
 function Gauge({ value, whitelisted }) {
+  const { t } = useLanguage()
   const pct = Math.min(Math.max(value * 100, 0), 100)
   const r = 85, cx = 102, cy = 96, stroke = 12
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - pct / 100)
   const color = pct >= 60 ? 'var(--danger)' : pct >= 30 ? 'var(--warning)' : 'var(--success)'
-  const label = pct >= 60 ? 'PHISHING' : pct >= 30 ? 'SUSPICIOUS' : 'SAFE'
+  const label = pct >= 60 ? t('rc.verdict.phishing') : pct >= 30 ? t('rc.verdict.suspicious') : t('rc.verdict.safe')
   return (
     <div style={{ textAlign: 'center' }}>
-      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct.toFixed(0)} aria-label={`Risk score ${pct.toFixed(0)} percent, ${label.toLowerCase()}`}>
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct.toFixed(0)} aria-label={t('rc.gauge.aria', { pct: pct.toFixed(0), label: label.toLowerCase() })}>
       <svg width="204" height="130" viewBox="0 0 204 130" style={{ display: 'block', margin: '0 auto' }}>
         <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke="var(--bg-tab)" strokeWidth={stroke} strokeLinecap="round" />
         <path d="M17 122 A 85 85 0 0 1 187 122" fill="none" stroke={color} strokeWidth={stroke}
@@ -272,7 +280,7 @@ function Gauge({ value, whitelisted }) {
       </div>
       {whitelisted && (
         <span style={{ color: 'var(--success)', fontSize: '0.65rem', fontWeight: 600, display: 'block', marginTop: '2px' }}>
-          {'Reputable \u00B7 Analysis Performed'}
+          {t('rc.gauge.reputable')}
         </span>
       )}
     </div>
@@ -315,6 +323,7 @@ function Badge({ children, color, bg }) {
 }
 
 function FeatureImportanceChart({ importance }) {
+  const { t } = useLanguage()
   if (!importance || Object.keys(importance).length === 0) return null
   const entries = Object.entries(importance)
     .map(([name, val]) => ({ name, val, abs: Math.abs(val) }))
@@ -324,11 +333,11 @@ function FeatureImportanceChart({ importance }) {
   return (
     <div style={{ marginTop: '1rem' }}>
       <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
-        Feature Impact on Prediction
+        {t('rc.featureImpact')}
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
         {entries.map(({ name, val }) => {
-          const label = FEATURE_LABELS[name] || name
+          const label = FEATURE_LABEL_KEYS[name] ? t(FEATURE_LABEL_KEYS[name]) : name
           const pct = Math.abs(val) / maxAbs * 100
           const isPositive = val > 0
           return (
@@ -383,10 +392,10 @@ function TabButton({ active, onClick, children }) {
   )
 }
 
-function formatFeatureBadge(name, value, whitelisted, brandInfo) {
-  const formatted = formatFeatureValue(name, value)
+function formatFeatureBadge(name, value, whitelisted, brandInfo, t) {
+  const formatted = formatFeatureValue(name, value, t)
   if (name === 'entropy') {
-    const label = value > 4.5 ? 'High \u00B7 Suspicious' : value > 3.5 ? 'Medium \u00B7 Neutral' : 'Low \u00B7 Safe'
+    const label = value > 4.5 ? t('rc.entropy.high') : value > 3.5 ? t('rc.entropy.medium') : t('rc.entropy.low')
     const color = whitelisted ? 'var(--text-secondary)' : (value > 4.5 ? 'var(--danger)' : value > 3.5 ? 'var(--warning)' : 'var(--success)')
     return { text: `${formatted} \u00B7 ${label}`, color }
   }
@@ -406,20 +415,21 @@ function formatFeatureBadge(name, value, whitelisted, brandInfo) {
   return { text: formatted, color: null }
 }
 
-const ENGINE_LABELS = {
-  ai_model: 'AI Model',
-  dns_infrastructure: 'DNS Infrastructure',
-  url_pattern: 'URL Pattern',
-  brand: 'Brand Impersonation',
+const ENGINE_LABEL_KEYS = {
+  ai_model: 'rc.engine.ai_model',
+  dns_infrastructure: 'rc.engine.dns_infrastructure',
+  url_pattern: 'rc.engine.url_pattern',
+  brand: 'rc.engine.brand',
 }
 
 function EngineResultRow({ name, result }) {
+  const { t } = useLanguage()
   const data = result || {}
   const score = data.score || 0
   const verdict = data.verdict || 'safe'
-  const details = data.details || 'No data'
+  const details = data.details || t('rc.engine.noData')
   const color = score >= 60 ? 'var(--danger)' : score >= 30 ? 'var(--warning)' : 'var(--success)'
-  const label = ENGINE_LABELS[name] || name
+  const label = ENGINE_LABEL_KEYS[name] ? t(ENGINE_LABEL_KEYS[name]) : name
   return (
     <div style={{ marginBottom: '0.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
@@ -435,6 +445,7 @@ function EngineResultRow({ name, result }) {
 }
 
 function ReputationSection({ reputation }) {
+  const { t } = useLanguage()
   if (!reputation || !reputation.scans) return null
   const avgScore = reputation.avg_score || 0
   const scanCount = reputation.scans || 0
@@ -443,13 +454,13 @@ function ReputationSection({ reputation }) {
   return (
     <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)', marginTop: '0.75rem' }}>
       <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-        Historical Reputation
+        {t('rc.rep.title')}
       </p>
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.78rem' }}>
-        <div><span style={{ color: 'var(--text-muted)' }}>Scans: </span><span style={{ color: 'var(--text-bright)', fontWeight: 600 }}>{scanCount}</span></div>
-        <div><span style={{ color: 'var(--text-muted)' }}>Avg Score: </span><span style={{ color: avgScore >= 60 ? 'var(--danger)' : avgScore >= 30 ? 'var(--warning)' : 'var(--success)', fontWeight: 600 }}>{avgScore.toFixed(1)}</span></div>
-        <div><span style={{ color: 'var(--text-muted)' }}>Phishing Rate: </span><span style={{ color: phishingRate > 0.5 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>{(phishingRate * 100).toFixed(1)}%</span></div>
-        <div><span style={{ color: 'var(--text-muted)' }}>Last: </span><span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{lastSeen}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>{t('rc.rep.scans')}</span><span style={{ color: 'var(--text-bright)', fontWeight: 600 }}>{scanCount}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>{t('rc.rep.avg')}</span><span style={{ color: avgScore >= 60 ? 'var(--danger)' : avgScore >= 30 ? 'var(--warning)' : 'var(--success)', fontWeight: 600 }}>{avgScore.toFixed(1)}</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>{t('rc.rep.rate')}</span><span style={{ color: phishingRate > 0.5 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>{(phishingRate * 100).toFixed(1)}%</span></div>
+        <div><span style={{ color: 'var(--text-muted)' }}>{t('rc.rep.last')}</span><span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{lastSeen}</span></div>
       </div>
     </div>
   )
@@ -461,32 +472,56 @@ function formatLatency(ms) {
   return `${(ms / 1000).toFixed(2)} s`
 }
 
-function getMissingSources(result) {
+function getMissingSources(result, t) {
   const missing = []
   const dns = result?.dns_whois || {}
   const ssl = result?.ssl_redirect || {}
   const dnsMissing = Object.keys(dns).length === 0 || dns.a_record_count === -1 || dns.a_record_count === undefined
   const sslMissing = Object.keys(ssl).length === 0 || ssl.ssl_valid === -1 || ssl.ssl_valid === undefined
   if (!result?.html_provided) missing.push('HTML / DOM')
-  else if (result.analysis_quality === 'limited') missing.push('HTML / DOM (parse failed)')
+  else if (result.analysis_quality === 'limited') missing.push(t ? t('rc.limited.parseFailed') : 'HTML / DOM (parse failed)')
   if (dnsMissing) missing.push('DNS / WHOIS')
   if (sslMissing) missing.push('SSL / Redirect')
   return missing
 }
 
+function LimitedAnalysisBanner({ result }) {
+  const { t } = useLanguage()
+  const missing = getMissingSources(result, t)
+  if (missing.length === 0) return null
+  const reason = result.analysis_reason || ''
+  return (
+    <div style={{
+      marginBottom: '1rem', padding: '0.6rem 0.9rem', borderRadius: '8px',
+      background: 'var(--warning-bg)', border: '1px solid var(--warning)44',
+    }}>
+      <p style={{ margin: 0, color: 'var(--warning)', fontSize: '0.8rem', fontWeight: 700 }}>
+        {'\u26A0'} {t('rc.limited.title', { list: missing.join(', ') })}
+      </p>
+      <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: '1.4' }}>
+        {reason
+          ? t('rc.limited.reason', { reason })
+          : t('rc.limited.fallback')
+        }
+        {t('rc.limited.tail')}
+      </p>
+    </div>
+  )
+}
 function DataCoverage({ result }) {
+  const { t } = useLanguage()
   const dns = result?.dns_whois || {}
   const ssl = result?.ssl_redirect || {}
   const items = [
-    { key: 'dns', label: 'DNS / WHOIS', ok: Object.keys(dns).length > 0 && dns.a_record_count !== -1 && dns.a_record_count !== undefined },
-    { key: 'ssl', label: 'SSL / Redirect', ok: Object.keys(ssl).length > 0 && ssl.ssl_valid !== -1 && ssl.ssl_valid !== undefined },
-    { key: 'html', label: 'HTML / DOM', ok: !!result?.html_provided && result?.analysis_quality !== 'limited' },
-    { key: 'brand', label: 'Brand Detection', ok: !!(result?.brand_analysis && (result.brand_analysis.brands_detected || []).length > 0) },
+    { key: 'dns', label: t('rc.coverage.dns'), ok: Object.keys(dns).length > 0 && dns.a_record_count !== -1 && dns.a_record_count !== undefined },
+    { key: 'ssl', label: t('rc.coverage.ssl'), ok: Object.keys(ssl).length > 0 && ssl.ssl_valid !== -1 && ssl.ssl_valid !== undefined },
+    { key: 'html', label: t('rc.coverage.html'), ok: !!result?.html_provided && result?.analysis_quality !== 'limited' },
+    { key: 'brand', label: t('rc.coverage.brand'), ok: !!(result?.brand_analysis && (result.brand_analysis.brands_detected || []).length > 0) },
   ]
   return (
     <div style={{
       display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem',
-    }} role="list" aria-label="Data sources used in this analysis">
+    }} role="list" aria-label={t('rc.coverage.aria')}>
       {items.map(it => (
         <span key={it.key} role="listitem" style={{
           display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
@@ -503,32 +538,33 @@ function DataCoverage({ result }) {
 }
 
 function ScoreLegend({ result }) {
+  const { t } = useLanguage()
   const ai = result.phishing_probability
   const agg = result.aggregate_score
   const threat = result.threat_match
   const items = [
     {
       key: 'ai',
-      label: 'AI Probability',
+      label: t('rc.legend.ai.label'),
       value: ai != null ? `${(ai * 100).toFixed(1)}%` : 'N/A',
       color: ai >= 0.6 ? 'var(--danger)' : ai >= 0.3 ? 'var(--warning)' : 'var(--success)',
-      desc: 'Raw Gated-Fusion model output (temperature-scaled sigmoid). Text + URL patterns only.',
+      desc: t('rc.legend.ai.desc'),
     },
     {
       key: 'agg',
-      label: 'Aggregate Risk Score',
+      label: t('rc.legend.agg.label'),
       value: agg != null ? `${agg}/100` : 'N/A',
       color: agg >= 60 ? 'var(--danger)' : agg >= 30 ? 'var(--warning)' : 'var(--success)',
-      desc: 'Weighted vote across AI + DNS + URL + Brand engines. This is the headline verdict.',
+      desc: t('rc.legend.agg.desc'),
     },
     {
       key: 'threat',
-      label: 'Threat Intelligence',
-      value: threat ? (threat.layer === 'community_feed' ? 'Feed Hit' : 'Blocklist Hit') : 'No Match',
+      label: t('rc.legend.threat.label'),
+      value: threat ? (threat.layer === 'community_feed' ? t('rc.legend.threat.feedHit') : t('rc.legend.threat.blocklistHit')) : t('rc.legend.threat.noMatch'),
       color: threat ? 'var(--danger)' : 'var(--text-muted)',
       desc: threat
-        ? `Matched "${threat.value}" (${threat.source || threat.layer}). A strong signal, not a hard verdict.`
-        : 'No known-threat database or blocklist entry matched this URL.',
+        ? t('rc.legend.threat.descHit', { value: threat.value || '', source: threat.source || threat.layer })
+        : t('rc.legend.threat.descNone'),
     },
   ]
   return (
@@ -536,7 +572,7 @@ function ScoreLegend({ result }) {
       display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem',
       marginBottom: '1rem', padding: '0.75rem', borderRadius: '8px',
       background: 'var(--bg-page)', border: '1px solid var(--border)',
-    }} role="list" aria-label="How the risk numbers differ">
+    }} role="list" aria-label={t('rc.legend.aria')}>
       {items.map(it => (
         <div key={it.key} role="listitem" style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
@@ -550,30 +586,8 @@ function ScoreLegend({ result }) {
   )
 }
 
-function LimitedAnalysisBanner({ result }) {
-  const missing = getMissingSources(result)
-  if (missing.length === 0) return null
-  const reason = result.analysis_reason || ''
-  return (
-    <div style={{
-      marginBottom: '1rem', padding: '0.6rem 0.9rem', borderRadius: '8px',
-      background: 'var(--warning-bg)', border: '1px solid var(--warning)44',
-    }}>
-      <p style={{ margin: 0, color: 'var(--warning)', fontSize: '0.8rem', fontWeight: 700 }}>
-        {'\u26A0'} Limited Analysis — missing: {missing.join(', ')}
-      </p>
-      <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: '1.4' }}>
-        {reason
-          ? `Reason: ${reason}. `
-          : 'Some infrastructure or page signals were unavailable, so the result relies on a subset of evidence. '
-          }
-        The score still combines the engines that had data.
-      </p>
-    </div>
-  )
-}
-
 function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance, confidence }) {
+  const { t } = useLanguage()
   const suspTld = result.suspicious_tld
   const isShort = result.is_shortener
   const expandedUrl = result.expanded_url
@@ -592,7 +606,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
         <div style={{ flexShrink: 0 }}>
           <Gauge value={confidence} whitelisted={isWhitelisted} />
           <div style={{ textAlign: 'center', marginTop: '0.25rem', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-            Aggregate risk score (0-100)
+            {t('rc.gauge.caption')}
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -604,10 +618,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               border: '1px solid var(--success)44', marginTop: '1rem',
             }}>
               <p style={{ margin: 0, color: 'var(--success)', fontSize: '0.85rem', fontWeight: 700 }}>
-                {'\u2713'} Known Reputable Domain
-              </p>
-              <p style={{ margin: '0.35rem 0 0', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: '1.4' }}>
-                This domain is known reputable, but a full URL / brand / content analysis was still performed. The risk score reflects the analysis — reputation only lowers it, never overrides it.
+                {'\u2713'} {t('rc.whitelisted')}
               </p>
             </div>
           )}
@@ -625,14 +636,14 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           border: `1px solid ${barColor}44`,
         }}>
           <p style={{ margin: '0 0 0.5rem', color: barColor, fontSize: '0.85rem', fontWeight: 700 }}>
-            {badgeIcon} Analysis Summary
+            {badgeIcon} {t('rc.analysisSummary')}
           </p>
           <p style={{ margin: '0 0 0.75rem', color: 'var(--text-strong)', fontSize: '0.85rem', lineHeight: '1.6' }}>
             {result.explanation.verdict_summary}
           </p>
           {result.explanation.key_findings?.length > 0 && (
             <div style={{ marginBottom: '0.5rem' }}>
-              <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key Findings</p>
+              <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('rc.keyFindings')}</p>
               {result.explanation.key_findings.map((f, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem', marginBottom: '0.2rem' }}>
                   <span style={{ color: barColor, fontSize: '0.75rem', flexShrink: 0 }}>{'\u2022'}</span>
@@ -643,7 +654,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
           )}
           {result.explanation.recommendations?.length > 0 && (
             <div style={{ padding: '0.5rem 0.6rem', borderRadius: '6px', background: 'var(--bg-subtle)', marginTop: '0.25rem' }}>
-              <p style={{ margin: '0 0 0.25rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recommendations</p>
+              <p style={{ margin: '0 0 0.25rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('rc.recommendations')}</p>
               {result.explanation.recommendations.map((r, i) => (
                 <p key={i} style={{ margin: '0 0 0.15rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
                   {i + 1}. {r}
@@ -659,15 +670,15 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
       }}>
         <div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
-            Morphology &amp; Characters
+            {t('rc.section.morphology')}
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             {morphFeatures.map(key => {
               const f = featureMap[key]
               if (!f) return null
-              const label = FEATURE_LABELS[f.name] || f.name
-              const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted, brand)
+              const label = FEATURE_LABEL_KEYS[f.name] ? t(FEATURE_LABEL_KEYS[f.name]) : f.name
+              const tooltip = FEATURE_TOOLTIP_KEYS[f.name] ? t(FEATURE_TOOLTIP_KEYS[f.name]) : ''
+              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted, brand, t)
               const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
@@ -690,15 +701,15 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
 
         <div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.35rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
-            Behavioral &amp; Infrastructure
+            {t('rc.section.behavioral')}
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             {behavFeatures.map(key => {
               const f = featureMap[key]
               if (!f) return null
-              const label = FEATURE_LABELS[f.name] || f.name
-              const tooltip = FEATURE_TOOLTIPS[f.name] || ''
-              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted, brand)
+              const label = FEATURE_LABEL_KEYS[f.name] ? t(FEATURE_LABEL_KEYS[f.name]) : f.name
+              const tooltip = FEATURE_TOOLTIP_KEYS[f.name] ? t(FEATURE_TOOLTIP_KEYS[f.name]) : ''
+              const { text, color } = formatFeatureBadge(f.name, f.value, isWhitelisted, brand, t)
               const isRisk = !isWhitelisted && getFeatureRisk(f.name, f.value)
               return (
                 <div key={f.name} style={{
@@ -722,11 +733,11 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               background: suspTld && !isWhitelisted ? 'var(--danger-bg)' : 'var(--bg-page)',
             }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', display: 'flex', alignItems: 'center' }}>
-                Suspicious TLD
-                <TooltipIcon text="Certain TLD extensions (.xyz, .top, .loan ...) are disproportionately used by phishing campaigns due to low registration cost." />
+                {t('rc.suspiciousTld')}
+                <TooltipIcon text={t('rc.suspiciousTld.tip')} />
               </span>
               <Badge color={suspTld && !isWhitelisted ? 'var(--danger)' : 'var(--success)'} bg={suspTld && !isWhitelisted ? 'var(--danger-bg)' : 'var(--success-bg)'}>
-                {suspTld ? 'Yes' : 'No'}
+                {suspTld ? t('common.yes') : t('common.no')}
               </Badge>
             </div>
           </div>
@@ -736,7 +747,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
         <div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
-            Advanced Analysis
+            {t('rc.section.advanced')}
           </p>
           {brand?.has_brand_impersonation ? (
             <div style={{
@@ -744,7 +755,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               background: 'var(--danger-bg)', border: '1px solid var(--danger)44', marginBottom: '0.75rem',
             }}>
               <p style={{ margin: 0, color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}>
-                {'\u26A0'} Brand Impersonation
+                {'\u26A0'} {t('rc.brandImpersonation')}
               </p>
               <p style={{ margin: '0.35rem 0', color: 'var(--text-bright)', fontSize: '0.9rem', fontWeight: 600 }}>
                 {brand.brands_detected?.join(', ')}
@@ -755,7 +766,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                 </p>
               ))}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Risk</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{t('rc.risk')}</span>
                 <div style={{ flex: 1 }}>
                   <ProgressBar value={brand.risk_score} color={brand.risk_score > 0.7 ? 'var(--danger)' : 'var(--warning)'} height="14px" showLabel={false} />
                 </div>
@@ -765,7 +776,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               </div>
               {brand.techniques?.length > 0 && (
                 <p style={{ margin: '0.35rem 0 0', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-                  Technique: {brand.techniques.join(', ')}
+                  {t('rc.technique', { value: brand.techniques.join(', ') })}
                 </p>
               )}
             </div>
@@ -775,7 +786,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               background: 'var(--bg-page)', border: '1px solid var(--border)', marginBottom: '0.75rem',
             }}>
               <p style={{ margin: 0, color: 'var(--success)', fontSize: '0.8rem' }}>
-                {'\u2713'} No brand impersonation detected
+                {'\u2713'} {t('rc.noBrandImpersonation')}
               </p>
             </div>
           )}
@@ -785,7 +796,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               background: 'var(--bg-page)', border: '1px solid var(--border)', marginBottom: '0.75rem',
             }}>
               <p style={{ margin: '0 0 0.5rem', color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Engine Results ({result.engine_count || Object.keys(result.engine_results.engines).length})
+                {t('rc.engine.results', { count: result.engine_count || Object.keys(result.engine_results.engines).length })}
               </p>
               {Object.entries(result.engine_results.engines).map(([name, data]) => (
                 <EngineResultRow key={name} name={name} result={data} />
@@ -797,7 +808,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
 
         <div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 0.5rem' }}>
-            Analysis Details
+            {t('rc.section.details')}
           </p>
           <div style={{
             padding: '0.75rem', borderRadius: '8px',
@@ -807,27 +818,27 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
               <tbody>
                 {(() => {
                   const rows = [
-                  { label: 'Aggregate Risk Score', value: `${pct}%`, color: barColor, tooltip: 'Calibrated multi-engine score (Temperature Scaling + weighted voting across all engines). This is the headline decision value.' },
-                  { label: 'AI Model Probability', value: `${((result.phishing_probability ?? 0) * 100).toFixed(1)}%`, color: result.phishing_probability >= 0.6 ? 'var(--danger)' : result.phishing_probability >= 0.3 ? 'var(--warning)' : 'var(--success)', tooltip: 'Raw Gated-Fusion output (sigmoid of temperature-scaled logits), before multi-engine weighting.' },
-                  { label: 'Threat Intelligence', value: (() => {
-                    const t = result.threat_match
-                    if (!t) return 'No known match'
-                    return `${t.value} (${t.source || t.layer || 'feed'})`
-                  })(), color: result.threat_match ? 'var(--danger)' : 'var(--text-muted)', tooltip: 'Known-threat database / blocklist / community feed match. A strong signal that never overrides the aggregate score.' },
-                  { label: 'Scan Duration', value: formatLatency(result.latency_ms) || 'N/A', color: 'var(--text-primary)', tooltip: 'Total backend analysis time for this scan (DNS + SSL + model inference + engines).' },
-                  { label: 'Confidence Range', value: (() => {
+                  { label: t('rc.row.aggregateScore'), value: `${pct}%`, color: barColor, tooltip: t('rc.row.tip.aggregateScore') },
+                  { label: t('rc.row.aiProbability'), value: `${((result.phishing_probability ?? 0) * 100).toFixed(1)}%`, color: result.phishing_probability >= 0.6 ? 'var(--danger)' : result.phishing_probability >= 0.3 ? 'var(--warning)' : 'var(--success)', tooltip: t('rc.row.tip.aiProbability') },
+                  { label: t('rc.row.threatIntel'), value: (() => {
+                    const threat = result.threat_match
+                    if (!threat) return t('rc.row.value.noMatch')
+                    return `${threat.value} (${threat.source || threat.layer || 'feed'})`
+                  })(), color: result.threat_match ? 'var(--danger)' : 'var(--text-muted)', tooltip: t('rc.row.tip.threatIntel') },
+                  { label: t('rc.row.scanDuration'), value: formatLatency(result.latency_ms) || 'N/A', color: 'var(--text-primary)', tooltip: t('rc.row.tip.scanDuration') },
+                  { label: t('rc.row.confidenceRange'), value: (() => {
                     const b = result.probability_band
                     if (!b || b.low == null) return 'N/A'
                     return `${(b.low * 100).toFixed(1)}% \u2013 ${(b.high * 100).toFixed(1)}%`
-                  })(), color: 'var(--text-primary)', tooltip: 'Approximate probability band (±1 logit std) — shows model uncertainty around the point estimate.' },
-                  { label: 'Reputable', value: isWhitelisted ? 'Yes' : 'No', color: isWhitelisted ? 'var(--success)' : 'var(--text-muted)', tooltip: 'Known reputable domain — a soft signal only. Full URL / brand / content analysis still runs and can override it.' },
-                  { label: 'URL Shortener', value: isShort ? 'Yes' : 'No', color: isShort ? 'var(--warning)' : 'var(--success)' },
-                  { label: 'Redirect', value: (() => {
+                  })(), color: 'var(--text-primary)', tooltip: t('rc.row.tip.confidenceRange') },
+                  { label: t('rc.row.reputable'), value: isWhitelisted ? t('common.yes') : t('common.no'), color: isWhitelisted ? 'var(--success)' : 'var(--text-muted)', tooltip: t('rc.row.tip.reputable') },
+                  { label: t('rc.row.shortener'), value: isShort ? t('common.yes') : t('common.no'), color: isShort ? 'var(--warning)' : 'var(--success)' },
+                  { label: t('rc.row.redirect'), value: (() => {
                     const cr = result.ssl_redirect?.cross_domain_redirect
-                    if (cr !== 1) return 'No'
+                    if (cr !== 1) return t('common.no')
                     const fu = (result.ssl_redirect?.final_url || '').toLowerCase()
                     const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
-                    return known ? 'To Reputable Domain' : 'Unknown Destination'
+                    return known ? t('rc.row.value.toReputable') : t('rc.row.value.unknownDest')
                   })(), color: (() => {
                     const cr = result.ssl_redirect?.cross_domain_redirect
                     if (cr !== 1) return 'var(--success)'
@@ -835,12 +846,12 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
                     const known = WHITELIST_DOMAINS.some(d => fu.includes(d.toLowerCase()))
                     return known ? 'var(--warning)' : 'var(--danger)'
                   })() },
-                  { label: 'Final Destination', value: expandedUrl || 'Same as input', color: 'var(--success)' },
-                  { label: 'Analysis Quality', value: result.analysis_quality === 'full' ? 'Full' : 'Limited', color: result.analysis_quality === 'full' ? 'var(--success)' : 'var(--warning)' },
-                  { label: 'HTML Content', value: result.html_provided ? 'Provided' : 'Not provided', color: result.html_provided ? 'var(--success)' : 'var(--text-muted)' },
-                  { label: 'Features Extracted', value: `${features.length} signals`, color: 'var(--text-primary)' },
-                  { label: 'Model', value: `Multi-Engine (${result.engine_count || 5})`, color: 'var(--text-primary)' },
-                  { label: 'Analyzed At', value: result.timestamp ? new Date(result.timestamp).toLocaleString() : scanTime, color: 'var(--text-muted)' },
+                  { label: t('rc.row.finalDestination'), value: expandedUrl || t('rc.row.value.sameAsInput'), color: 'var(--success)' },
+                  { label: t('rc.row.analysisQuality'), value: result.analysis_quality === 'full' ? t('rc.row.value.full') : t('rc.row.value.limited'), color: result.analysis_quality === 'full' ? 'var(--success)' : 'var(--warning)' },
+                  { label: t('rc.row.htmlContent'), value: result.html_provided ? t('rc.row.value.provided') : t('rc.row.value.notProvided'), color: result.html_provided ? 'var(--success)' : 'var(--text-muted)' },
+                  { label: t('rc.row.featuresExtracted'), value: t('rc.row.value.signals', { count: features.length }), color: 'var(--text-primary)' },
+                  { label: t('rc.row.model'), value: t('rc.row.value.multiEngine', { count: result.engine_count || 5 }), color: 'var(--text-primary)' },
+                  { label: t('rc.row.analyzedAt'), value: result.timestamp ? new Date(result.timestamp).toLocaleString() : scanTime, color: 'var(--text-muted)' },
                   ]
                   return rows.map((row, i) => (
                   <tr key={i}>
@@ -864,6 +875,7 @@ function OverviewTab({ result, features, brand, pct, barColor, badgeLabel, badge
 }
 
 function DetailsTab({ dns, ssl, whitelisted, result }) {
+  const { t } = useLanguage()
   const trustedCAOverride = result?.url ? /google\.com|youtube\.com|gmail\.com|github\.com|facebook\.com|microsoft\.com|apple\.com|amazon\.com/i.test(result.url) : false
   const finalUrl = ssl?.final_url || ''
   const extra = { whitelisted, trustedCAOverride, finalUrl }
@@ -872,16 +884,16 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
   if (!dns && !ssl) {
     return (
       <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-        No network data available — DNS/WHOIS/SSL extraction requires network access.
+        {t('rc.noNetwork')}
       </div>
     )
   }
 
   const renderRow = (key, value) => {
-    const label = DETAIL_LABELS[key] || key
-    const formatted = formatDetailValue(key, value, extra)
+    const label = DETAIL_LABEL_KEYS[key] ? t(DETAIL_LABEL_KEYS[key]) : key
+    const formatted = formatDetailValue(key, value, extra, t)
     const color = getDetailColor(key, value, extra)
-    const badge = getDetailBadge(key, value, extra)
+    const badge = getDetailBadge(key, value, extra, t)
     return (
       <div key={key} style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -909,7 +921,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
       <div>
         <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
-          DNS & WHOIS
+          {t('rc.section.dns')}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
           {subInfo && (
@@ -918,10 +930,10 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
               background: 'var(--warning-bg)', border: '1px solid var(--warning)44',
             }}>
               <p style={{ margin: '0 0 0.25rem', color: 'var(--warning)', fontSize: '0.7rem', fontWeight: 700 }}>
-                {'\u26A0'} Subdomain Note
+                {'\u26A0'} {t('rc.subdomain.title')}
               </p>
               <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.72rem', lineHeight: '1.5' }}>
-                WHOIS data above belongs to <strong style={{ color: 'var(--text-bright)' }}>{subInfo.registered_domain}</strong>, not the subdomain <strong style={{ color: 'var(--text-bright)' }}>{subInfo.subdomain}</strong>. Subdomain-based phishing is a common evasion technique.
+                {t('rc.subdomain.body', { reg: subInfo.registered_domain, sub: subInfo.subdomain })}
               </p>
             </div>
           )}
@@ -930,7 +942,7 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
       </div>
       <div>
         <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
-          SSL & Redirect
+          {t('rc.section.ssl')}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
           {ssl && Object.entries(ssl).map(([key, value]) => renderRow(key, value))}
@@ -941,14 +953,15 @@ function DetailsTab({ dns, ssl, whitelisted, result }) {
 }
 
 function BehaviorTab({ domSignals, features, htmlProvided }) {
+  const { t } = useLanguage()
   if (!htmlProvided) {
     return (
       <div style={{ textAlign: 'center', padding: '2.5rem 1.5rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
         <p style={{ margin: '0 0 0.5rem', color: 'var(--warning)', fontSize: '1rem', fontWeight: 700 }}>
-          {'\u26A0'} HTML Content Not Provided
+          {'\u26A0'} {t('rc.noHtml.title')}
         </p>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
-          No HTML content was submitted — DOM analysis is unavailable. Upload an HTML file to enable behavioral analysis including script detection, form tracking, and JavaScript signal extraction.
+          {t('rc.noHtml.body')}
         </p>
       </div>
     )
@@ -963,15 +976,15 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
       <div>
         <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
-          DOM Structure
+          {t('rc.section.dom')}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
           {['script_count', 'iframe_count', 'form_count', 'input_count', 'password_input', 'button_count', 'total_links', 'hidden_elements', 'meta_refresh'].map(key => {
             if (!(key in domSignals)) return null
             const value = domSignals[key]
-            const label = SIGNAL_LABELS[key] || key
+            const label = SIGNAL_LABEL_KEYS[key] ? t(SIGNAL_LABEL_KEYS[key]) : key
             const isRisk = formatSignalRisk(key, value)
-            const formatted = formatFeatureValue(key, value)
+            const formatted = formatFeatureValue(key, value, t)
             return (
               <div key={key} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -989,15 +1002,15 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
       </div>
       <div>
         <p style={{ color: 'var(--text-bright)', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>
-          JavaScript Signals
+          {t('rc.section.js')}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
           {['external_scripts', 'eval_count', 'document_write', 'suspicious_js', 'empty_links', 'external_link_ratio'].map(key => {
             if (!(key in domSignals)) return null
             const value = domSignals[key]
-            const label = SIGNAL_LABELS[key] || key
+            const label = SIGNAL_LABEL_KEYS[key] ? t(SIGNAL_LABEL_KEYS[key]) : key
             const isRisk = formatSignalRisk(key, value)
-            const formatted = formatFeatureValue(key, value)
+            const formatted = formatFeatureValue(key, value, t)
             return (
               <div key={key} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1018,6 +1031,7 @@ function BehaviorTab({ domSignals, features, htmlProvided }) {
 }
 
 function DomainResult({ result }) {
+  const { t } = useLanguage()
   const dns = result.dns_whois
   return (
     <div style={{ width: '100%', marginTop: '1.5rem', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 0 1px var(--accent)44' }}>
@@ -1025,14 +1039,14 @@ function DomainResult({ result }) {
       <div style={{ background: 'var(--bg-card)', padding: '1.5rem' }}>
         <div style={{ marginBottom: '1rem' }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Domain Lookup
+            {t('rc.domain.title')}
           </p>
           <p style={{ margin: 0, color: 'var(--text-bright)', fontSize: '0.9rem', fontFamily: 'monospace' }}>
             {result.domain}
           </p>
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-          DNS &amp; WHOIS records — no AI analysis (domain-only lookup)
+          {t('rc.domain.body')}
         </p>
         <DetailsTab dns={dns} ssl={result.ssl_redirect} />
       </div>
@@ -1041,6 +1055,7 @@ function DomainResult({ result }) {
 }
 
 function IpResult({ result }) {
+  const { t } = useLanguage()
   const dns = result.dns_whois
   const ssl = result.ssl_redirect
   return (
@@ -1049,14 +1064,14 @@ function IpResult({ result }) {
       <div style={{ background: 'var(--bg-card)', padding: '1.5rem' }}>
         <div style={{ marginBottom: '1rem' }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            IP Lookup
+            {t('rc.ip.title')}
           </p>
           <p style={{ margin: 0, color: 'var(--text-bright)', fontSize: '0.9rem', fontFamily: 'monospace' }}>
             {result.ip}
           </p>
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-          Reverse DNS &amp; WHOIS — no AI analysis (IP-only lookup)
+          {t('rc.ip.body')}
         </p>
         <DetailsTab dns={dns} ssl={ssl} />
       </div>
@@ -1065,6 +1080,7 @@ function IpResult({ result }) {
 }
 
 function ResultCard({ result }) {
+  const { t } = useLanguage()
   const [tab, setTab] = useState('overview')
 
   if (!result) return null
@@ -1079,7 +1095,7 @@ function ResultCard({ result }) {
   const barColor = confidence >= 0.6 ? 'var(--danger)' : confidence >= 0.3 ? 'var(--warning)' : 'var(--success)'
   const badgeBg = confidence >= 0.6 ? 'var(--danger-bg)' : confidence >= 0.3 ? 'var(--warning-bg)' : 'var(--success-bg)'
   const badgeColor = confidence >= 0.6 ? 'var(--danger)' : confidence >= 0.3 ? 'var(--warning)' : 'var(--success)'
-  const badgeLabel = confidence >= 0.6 ? 'PHISHING' : confidence >= 0.3 ? 'SUSPICIOUS' : 'SAFE'
+  const badgeLabel = confidence >= 0.6 ? t('rc.verdict.phishing') : confidence >= 0.3 ? t('rc.verdict.suspicious') : t('rc.verdict.safe')
   const badgeIcon = confidence >= 0.6 ? '\u26A0' : '\u2713'
 
   const rawFeatures = result.features || result.top_features || {}
@@ -1108,7 +1124,7 @@ function ResultCard({ result }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 0 0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Analyzed URL
+              {t('rc.analyzedUrl')}
             </p>
             <p style={{ margin: 0, color: 'var(--text-bright)', wordBreak: 'break-all', fontSize: '0.9rem', fontFamily: 'monospace' }}>
               {result.url}
@@ -1129,7 +1145,7 @@ function ResultCard({ result }) {
             borderRadius: '8px', background: 'var(--success-bg)', border: '1px solid var(--success)44',
           }}>
             <p style={{ margin: 0, color: 'var(--success)', fontSize: '0.8rem' }}>
-              {'\u2713'} Known reputable domain — full analysis was still performed; reputation only lowers the risk estimate.
+              {'\u2713'} {t('rc.whitelisted')}
             </p>
           </div>
         )}
@@ -1137,11 +1153,11 @@ function ResultCard({ result }) {
         <div style={{
           display: 'flex', gap: '0.25rem', background: 'var(--bg-tab)',
           borderRadius: '8px', padding: '2px', marginBottom: '1rem',
-        }} role="tablist" aria-label="Analysis tabs">
-          <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
-          <TabButton active={tab === 'details'} onClick={() => setTab('details')}>Details</TabButton>
-          <TabButton active={tab === 'behavior'} onClick={() => setTab('behavior')}>Behavior</TabButton>
-          {result.explanation && <TabButton active={tab === 'copilot'} onClick={() => setTab('copilot')}>AI Copilot</TabButton>}
+        }} role="tablist" aria-label={t('rc.tabs.aria')}>
+          <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>{t('rc.tab.overview')}</TabButton>
+          <TabButton active={tab === 'details'} onClick={() => setTab('details')}>{t('rc.tab.details')}</TabButton>
+          <TabButton active={tab === 'behavior'} onClick={() => setTab('behavior')}>{t('rc.tab.behavior')}</TabButton>
+          {result.explanation && <TabButton active={tab === 'copilot'} onClick={() => setTab('copilot')}>{t('rc.tab.copilot')}</TabButton>}
         </div>
 
         {tab === 'overview' && <OverviewTab {...{ result, features, brand, pct, barColor, badgeLabel, badgeIcon, badgeBg, badgeColor, scanTime, importance: result.feature_importance, confidence }} />}
@@ -1173,12 +1189,14 @@ function TypewriterText({ text, speed }) {
 }
 
 function CopilotTab({ result, explanation, confidence, barColor }) {
+  const { t, lang } = useLanguage()
   const [activeQuestion, setActiveQuestion] = useState(null)
   const [llmAnswers, setLlmAnswers] = useState({})
   const [loading, setLoading] = useState({})
   const [llmStatus, setLlmStatus] = useState(null)
   const exp = explanation || {}
   const verdict = confidence >= 0.6 ? 'phishing' : confidence >= 0.3 ? 'suspicious' : 'safe'
+  const verdictLabel = t('rc.verdict.' + verdict)
 
   useEffect(() => {
     const apiUrl = getApiUrl()
@@ -1187,43 +1205,52 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
       .then(d => setLlmStatus(d.available ? 'ai' : 'template'))
       .catch(() => setLlmStatus('template'))
   }, [])
+
+  // Template answers are rebuilt per render so they always follow the
+  // currently selected language. Explanation fields from the API are already
+  // localized by the backend (lang param on /predict).
   const templateAnswers = [
-    exp.verdict_summary || `The URL received a risk score of ${(confidence * 100).toFixed(0)}/100, which places it in the ${verdict} category. ${exp.risk_factors?.length ? 'Key risk factors: ' + exp.risk_factors.join(', ') + '.' : ''}`,
-    exp.key_findings?.length ? exp.key_findings.map((f, i) => `${i + 1}. ${f}`).join('. ') : 'No specific findings beyond the aggregate score.',
-    exp.recommendations?.length ? exp.recommendations.map((r, i) => `${i + 1}. ${r}`).join('. ') : 'No specific recommendations.',
+    (() => {
+      const base = exp.verdict_summary || t('copilot.ans.summary', { score: (confidence * 100).toFixed(0), verdict: verdictLabel })
+      const risk = exp.risk_factors?.length ? t('copilot.ans.summaryRisk', { risk: exp.risk_factors.join(', ') }) : ''
+      return base + risk
+    })(),
+    exp.key_findings?.length ? exp.key_findings.map((f, i) => `${i + 1}. ${f}`).join('. ') : t('copilot.ans.noFindings'),
+    exp.recommendations?.length ? exp.recommendations.map((r, i) => `${i + 1}. ${r}`).join('. ') : t('copilot.ans.noRecs'),
     (() => {
       const rep = result.reputation || {}
       if (rep.scans > 0) {
-        return `This domain has been scanned ${rep.scans} time(s) with an average score of ${rep.avg_score?.toFixed(0) || 'N/A'}/100 and a phishing rate of ${((rep.phishing_rate || 0) * 100).toFixed(0)}%. ${rep.scans > 1 ? 'The historical data provides a baseline for comparison.' : 'More scans will improve confidence in the reputation.'}`
+        const more = rep.scans > 1 ? t('copilot.ans.repBaseline') : t('copilot.ans.repMore')
+        return t('copilot.ans.reputation', { scans: rep.scans, avg: rep.avg_score?.toFixed(0) || 'N/A', rate: ((rep.phishing_rate || 0) * 100).toFixed(0), more })
       }
-      return 'This is the first scan of this domain. No historical reputation data is available yet — the current score reflects the multi-engine analysis only.'
+      return t('copilot.ans.noReputation')
     })(),
     (() => {
       const parts = []
       const brand = result.brand_analysis || {}
       if (brand.has_brand_impersonation) {
-        parts.push('Yes — brand impersonation detected targeting ' + (brand.brands_detected?.join(', ') || 'a known brand'))
+        parts.push(t('copilot.ans.brand', { brands: brand.brands_detected?.join(', ') || t('copilot.ans.knownBrand') }))
       }
       const sub = result.subdomain_info
       if (sub) {
-        parts.push(`The URL uses subdomain "${sub.subdomain}" on registered domain "${sub.registered_domain}" — a common technique where attackers host phishing pages on legitimate domain infrastructure`)
+        parts.push(t('copilot.ans.subdomain', { sub: sub.subdomain, reg: sub.registered_domain }))
       }
       if (result.suspicious_tld) {
-        parts.push('The TLD is known to be disproportionately used in phishing campaigns')
+        parts.push(t('copilot.ans.tld'))
       }
       if (result.is_shortener) {
-        parts.push('The URL uses a link shortener, which can obscure the final destination')
+        parts.push(t('copilot.ans.shortener'))
       }
-      return parts.length ? parts.join('. ') + '.' : 'No specific known attack patterns detected beyond the general risk scoring.'
+      return parts.length ? parts.join('. ') + '.' : t('copilot.ans.noAttack')
     })(),
   ]
 
   const faqs = [
-    { q: verdict === 'safe' ? 'Why is this URL considered safe?' : 'Why was this URL flagged?' },
-    { q: 'What are the key findings?' },
-    { q: 'What should I do next?' },
-    { q: 'How trustworthy is this domain?' },
-    { q: 'Is this a known attack pattern?' },
+    { q: verdict === 'safe' ? t('copilot.q.whySafe') : t('copilot.q.whyFlagged') },
+    { q: t('copilot.q.keyFindings') },
+    { q: t('copilot.q.nextSteps') },
+    { q: t('copilot.q.trust') },
+    { q: t('copilot.q.attack') },
   ]
 
   const fetchLlmAnswer = async (i) => {
@@ -1234,7 +1261,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
       const res = await fetch(`${apiUrl}/explain`, {
         method: 'POST',
         headers: getApiHeaders(),
-        body: JSON.stringify({ question: faqs[i].q, result }),
+        body: JSON.stringify({ question: faqs[i].q, result, lang }),
       })
       const data = await res.json()
       if (data.source === 'llm') {
@@ -1263,7 +1290,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
       `}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem' }}>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: '1.5' }}>
-          Ask questions about this analysis. Click a question to expand the answer.
+          {t('copilot.intro')}
         </p>
         {llmStatus && (
           <span style={{
@@ -1273,7 +1300,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
             border: llmStatus === 'ai' ? '1px solid var(--success-border)' : 'none',
             whiteSpace: 'nowrap',
           }}>
-            {llmStatus === 'ai' ? 'AI Enhanced' : 'Template'}
+            {llmStatus === 'ai' ? t('copilot.badge.ai') : t('copilot.badge.template')}
           </span>
         )}
       </div>
@@ -1324,6 +1351,7 @@ function CopilotTab({ result, explanation, confidence, barColor }) {
 }
 
 function FeedbackButton({ result }) {
+  const { t } = useLanguage()
   const [submitted, setSubmitted] = useState(null)
   const [sending, setSending] = useState(false)
 
@@ -1361,20 +1389,20 @@ function FeedbackButton({ result }) {
   }
 
   const options = [
-    { actual: 'safe', label: 'Safe', color: 'var(--success)' },
-    { actual: 'suspicious', label: 'Suspicious', color: 'var(--warning)' },
-    { actual: 'phishing', label: 'Phishing', color: 'var(--danger)' },
+    { actual: 'safe', label: t('feedback.option.safe'), color: 'var(--success)' },
+    { actual: 'suspicious', label: t('feedback.option.suspicious'), color: 'var(--warning)' },
+    { actual: 'phishing', label: t('feedback.option.phishing'), color: 'var(--danger)' },
   ]
 
   return (
     <div style={{ marginTop: '1rem', padding: '0.6rem 0.75rem', borderRadius: '8px', background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
       <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        What is the actual verdict of this page?
+        {t('feedback.question')}
       </p>
       <p style={{ margin: '0 0 0.35rem', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-        Our analysis says: <strong style={{ color: 'var(--text-secondary)' }}>{predicted}</strong>. Tell us what you observed on the page to improve the model.
+        {t('feedback.hint', { predicted })}
       </p>
-      <div style={{ display: 'flex', gap: '0.4rem' }} role="radiogroup" aria-label="Actual page verdict">
+      <div style={{ display: 'flex', gap: '0.4rem' }} role="radiogroup" aria-label={t('feedback.aria')}>
         {options.map((btn) => (
           <button key={btn.actual} onClick={() => sendFeedback(btn.actual)} disabled={!!submitted || sending} aria-pressed={submitted === btn.color} style={{
             padding: '0.3rem 0.6rem', borderRadius: '6px', border: submitted ? `1px solid ${btn.color}` : '1px solid var(--border)',
@@ -1388,7 +1416,7 @@ function FeedbackButton({ result }) {
       </div>
       {submitted && (
         <p style={{ margin: '0.35rem 0 0', color: 'var(--success)', fontSize: '0.7rem' }}>
-          Thanks for the feedback. {submitted === 'correct' ? 'The verdict matched your observation.' : 'This case was recorded for retraining.'}
+          {submitted === 'correct' ? t('feedback.thanks.correct') : t('feedback.thanks.misclassified')}
         </p>
       )}
     </div>

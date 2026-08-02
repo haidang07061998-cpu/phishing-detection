@@ -85,15 +85,20 @@ def _ollama_available() -> bool:
         return False
 
 
-def _explain_ollama(context: str, question: str) -> str | None:
+LANG_NAMES = {"en": "English", "vi": "Vietnamese"}
+
+
+def _explain_ollama(context: str, question: str, lang: str = "en") -> str | None:
     try:
+        lang_name = LANG_NAMES.get(lang, "English")
         prompt = (
             "You are a phishing detection AI assistant. You MUST follow these rules:\n"
             "1. ONLY use data explicitly listed in SCAN RESULTS below.\n"
             "2. NEVER make up or infer data that is not present.\n"
             "3. If a field says N/A or NOT AVAILABLE, state that the data could not be retrieved.\n"
             "4. If HTML, DNS, or SSL is NOT AVAILABLE, acknowledge the limitation in your answer.\n"
-            "5. Be concise: answer in 2-3 sentences. Do not repeat the question.\n\n"
+            "5. Be concise: answer in 2-3 sentences. Do not repeat the question.\n"
+            f"6. Answer in {lang_name}.\n\n"
             f"SCAN RESULTS:\n{context}\n\n"
             f"USER QUESTION: {question}\n\n"
             "ANSWER:"
@@ -118,7 +123,7 @@ def is_ollama_available() -> bool:
     return _ollama_available()
 
 
-def explain(result: dict, question: str) -> str | None:
+def explain(result: dict, question: str, lang: str = "en") -> str | None:
     if not _ollama_available():
         return None
-    return _explain_ollama(_build_context(result), question)
+    return _explain_ollama(_build_context(result), question, lang=lang)

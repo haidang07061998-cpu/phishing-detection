@@ -420,7 +420,7 @@ class PhishingPredictor:
     # Public API
     # ------------------------------------------------------------------
     def predict(self, url: str, html_content: str | None = None,
-                explain: bool | None = None) -> dict:
+                explain: bool | None = None, lang: str = "en") -> dict:
         _t_start = time.monotonic()
         brand_info = {"has_brand_impersonation": False, "brands_detected": [],
                       "max_confidence": 0.0, "risk_score": 0.0}
@@ -585,7 +585,7 @@ class PhishingPredictor:
             "reputation": reputation if reputation else {},
             "subdomain_info": subdomain_info,
         }
-        result_dict["explanation"] = generate_explanation(result_dict)
+        result_dict["explanation"] = generate_explanation(result_dict, lang=lang)
         return result_dict
 
     # Hooks so the inference lock can switch all loaded models into eval/zero-grad

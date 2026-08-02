@@ -70,26 +70,27 @@ export async function apiFetch(path, options = {}, apiKey = '', timeoutMs = DEFA
   return data
 }
 
-export function friendlyError(err) {
+export function friendlyError(err, t) {
+  const L = (key, fallback) => (typeof t === 'function' ? t(key) : fallback)
   if (err && err.name === 'AbortError') {
-    return 'Scan cancelled. Click SCAN again to retry.'
+    return L('error.abort', 'Scan cancelled. Click SCAN again to retry.')
   }
   const status = err && err.status
-  if (status === 408) return 'The request timed out. The backend may be busy — try again.'
-  if (status === 413) return 'The file or request is too large (max 2 MB).'
-  if (status === 401) return 'Authentication failed. Check your API key.'
+  if (status === 408) return L('error.timeout', 'The request timed out. The backend may be busy — try again.')
+  if (status === 413) return L('error.tooLarge', 'The file or request is too large (max 2 MB).')
+  if (status === 401) return L('error.unauthorized', 'Authentication failed. Check your API key.')
   if (status === 403) {
     const msg = (err && err.message) || ''
-    return msg || 'You do not have permission for this action. Enter a key with the required scope.'
+    return msg || L('error.forbidden', 'You do not have permission for this action. Enter a key with the required scope.')
   }
-  if (status === 429) return 'Too many requests. Please wait a moment and try again.'
-  if (status === 500) return 'The server encountered an error. Please try again later.'
+  if (status === 429) return L('error.rateLimited', 'Too many requests. Please wait a moment and try again.')
+  if (status === 500) return L('error.server', 'The server encountered an error. Please try again later.')
   if (status && status >= 400) {
-    const msg = (err && err.message) || 'The request was rejected.'
-    return msg.replace(/^Server error \(\d+\)/, 'The request could not be completed')
+    const msg = (err && err.message) || L('error.rejected', 'The request was rejected.')
+    return msg.replace(/^Server error \(\d+\)/, L('error.rejected', 'The request could not be completed'))
   }
   if (err && err.message && /failed to fetch|networkerror|load failed/i.test(err.message)) {
-    return 'Could not reach the server. Is the backend running?'
+    return L('error.network', 'Could not reach the server. Is the backend running?')
   }
-  return (err && err.message) || 'Something went wrong.'
+  return (err && err.message) || L('error.generic', 'Something went wrong.')
 }

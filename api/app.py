@@ -168,8 +168,14 @@ def predict():
     # Defaults to the PHISHGUARD_COMPUTE_IMPORTANCE config.
     explain = data.get("explain", None)
 
+    # Optional response-language for the explanation narrative ("en" | "vi").
+    # Falls back to English for anything else; never affects technical data.
+    lang = data.get("lang", "en")
+    if lang not in ("en", "vi"):
+        lang = "en"
+
     try:
-        result = predictor.predict(url, html_content, explain=explain)
+        result = predictor.predict(url, html_content, explain=explain, lang=lang)
         dispatch("scan.completed", {
             "url": url,
             "aggregate_score": result.get("aggregate_score"),
@@ -538,7 +544,11 @@ def explain():
     if not isinstance(data["question"], str) or not isinstance(data["result"], dict):
         return jsonify({"error": "'question' must be a string and 'result' must be an object"}), 400
 
-    llm_answer = llm_explain(data["result"], data["question"])
+    lang = data.get("lang", "en")
+    if lang not in ("en", "vi"):
+        lang = "en"
+
+    llm_answer = llm_explain(data["result"], data["question"], lang=lang)
     if llm_answer:
         return jsonify({"answer": llm_answer, "source": "llm"})
     return jsonify({"answer": None, "source": "template"})
