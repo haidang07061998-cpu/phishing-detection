@@ -8,16 +8,19 @@ Production hardening:
 - Every dispatch payload is signed with HMAC-SHA256 using
   ``PHISHGUARD_WEBHOOK_SECRET`` and sent as ``X-PhishGuard-Signature``.
 - Dispatch runs in a background thread with a bounded timeout and a retry
-  queue with exponential backoff (``PHISHGUARD_WEBHOOK_RETRIES``).
+  queue with exponential backoff (``PHISHGUARD_WEBHOOK_RETRIES``). Retries are
+  scheduled via a delay queue (min-heap keyed by ``next_attempt_at``), so a
+  failing webhook never blocks delivery of other events.
 - Every delivery attempt is appended to an audit log
   (``data/audit/webhooks.jsonl``).
 """
 
 import hashlib
+import heapq
 import hmac
+import itertools
 import json
 import logging
-import queue
 import sys
 import threading
 import time
@@ -37,7 +40,6 @@ CONFIG_PATH = Path(__file__).resolve().parents[1] / "data" / "webhook_config.jso
 AUDIT_PATH = Path(__file__).resolve().parents[1] / "data" / "audit" / "webhooks.jsonl"
 _config_lock = threading.Lock()
 _audit_lock = threading.Lock()
-_retry_queue: queue.Queue = queue.Queue()
 _worker_started = False
 _worker_lock = threading.Lock()
 
@@ -144,8 +146,36 @@ def _sign_payload(payload: bytes) -> str:
 
 
 # --------------------------------------------------------------------------
-# Dispatch (async + retry queue)
+# Dispatch (async + delay/retry queue)
 # --------------------------------------------------------------------------
+
+# Delay queue: a min-heap keyed by `next_attempt_at` (monotonic clock). The
+# single worker only ever waits until the earliest due item, so a webhook in
+# backoff does NOT hold up delivery of other (possibly healthy) events.
+_dispatch_cond = threading.Condition()
+_dispatch_heap: list[tuple[float, int, dict]] = []
+_dispatch_seq = itertools.count()
+
+
+def _enqueue(item: dict, delay: float = 0.0) -> None:
+    """Push a delivery item, optionally scheduled `delay` seconds from now."""
+    with _dispatch_cond:
+        heapq.heappush(_dispatch_heap, (time.monotonic() + delay, next(_dispatch_seq), item))
+        _dispatch_cond.notify()
+
+
+def _next_ready() -> dict:
+    """Block until an item is due (or a new item arrives); return the due item."""
+    with _dispatch_cond:
+        while True:
+            now = time.monotonic()
+            if _dispatch_heap and _dispatch_heap[0][0] <= now:
+                return heapq.heappop(_dispatch_heap)[2]
+            if _dispatch_heap:
+                _dispatch_cond.wait(timeout=_dispatch_heap[0][0] - now)
+            else:
+                _dispatch_cond.wait()
+
 
 def dispatch(event: str, payload: dict) -> None:
     cfg = load_config()
@@ -153,7 +183,7 @@ def dispatch(event: str, payload: dict) -> None:
         return
     if event not in cfg.get("events", []):
         return
-    _retry_queue.put({"url": cfg["url"], "event": event, "payload": payload, "attempt": 0})
+    _enqueue({"url": cfg["url"], "event": event, "payload": payload, "attempt": 0})
     _ensure_worker()
 
 
@@ -168,17 +198,11 @@ def _ensure_worker() -> None:
 
 def _worker_loop() -> None:
     while True:
-        try:
-            item = _retry_queue.get()
-        except Exception:
-            time.sleep(1)
-            continue
+        item = _next_ready()
         try:
             _deliver(item)
         except Exception:
             logger.exception("webhook delivery error")
-        finally:
-            _retry_queue.task_done()
 
 
 def _deliver(item: dict) -> None:
@@ -222,6 +246,5 @@ def _deliver(item: dict) -> None:
             backoff = BACKOFF_BASE_SECONDS * (2 ** attempt)
             logger.warning("Webhook %s failed (attempt %d), retrying in %.1fs: %s",
                            url, attempt + 1, backoff, exc)
-            time.sleep(backoff)
             item["attempt"] = attempt + 1
-            _retry_queue.put(item)
+            _enqueue(item, delay=backoff)

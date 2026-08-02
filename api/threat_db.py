@@ -21,6 +21,7 @@ import csv
 import io
 import json
 import logging
+import os
 import threading
 import time
 from pathlib import Path
@@ -37,9 +38,51 @@ _audit_lock = threading.Lock()
 
 MAX_VALUE_LEN = 512
 
+# --------------------------------------------------------------------------
+# In-memory lookup snapshot (request path never touches the network or disk)
+# --------------------------------------------------------------------------
+
+_snapshot_lock = threading.RLock()
+_snapshot = None            # _ThreatSnapshot | None
+_local_version = 0          # bumped when the local blocklist changes
+
+_feed_lock = threading.RLock()
+_feed_entries: dict = {}    # current community-feed entries {value: meta}
+_feed_source = ""
+_feed_fetched_at = 0.0
+_feed_loaded = False        # initial on-disk cache load attempted
+_feed_refresh_started = False  # a background refresh is in flight
+
+
+class _ThreatSnapshot:
+    """Immutable snapshot of local + feed entries with O(1)/O(labels) indexes."""
+
+    __slots__ = ("version", "known", "feed", "exact_urls", "exact_hosts", "meta")
+
+    def __init__(self, version: int, known: dict, feed: dict) -> None:
+        self.version = version
+        self.known = dict(known)
+        self.feed = dict(feed)
+        meta: dict = {}
+        for value, m in known.items():
+            meta[value] = {**m, "layer": "local"}
+        for value, m in feed.items():
+            meta.setdefault(value, {**m, "layer": "community_feed"})
+        self.meta = meta
+        self.exact_urls = frozenset(v for v in meta if "://" in v)
+        self.exact_hosts = frozenset(v for v in meta if "://" not in v)
+
 
 def _now() -> float:
     return time.time()
+
+
+def _bump_local_version() -> None:
+    """Invalidate the lookup snapshot after a local blocklist change."""
+    global _local_version, _snapshot
+    with _snapshot_lock:
+        _local_version += 1
+        _snapshot = None
 
 
 def _audit(action: str, value: str, **extra) -> None:
@@ -102,6 +145,7 @@ def add_entry(value: str, added_by: str = "admin", source: str = "manual",
             "notes": notes or "",
         }
         save_known(entries)
+    _bump_local_version()
     _audit("add", value, added_by=added_by, source=source, notes=notes)
     logger.info("Threat entry added: %s by %s", value, added_by)
     return {"status": "ok", "value": value}
@@ -116,6 +160,7 @@ def remove_entry(value: str, removed_by: str = "admin") -> dict:
         if existed:
             save_known(entries)
     if existed:
+        _bump_local_version()
         _audit("remove", value, removed_by=removed_by)
         logger.info("Threat entry removed: %s by %s", value, removed_by)
     return {"status": "ok", "value": value, "existed": bool(existed)}
@@ -212,25 +257,98 @@ def _fetch_feed(url: str, timeout: float = 15.0) -> dict:
     return entries
 
 
-def refresh_feed(url: str | None = None, force: bool = False) -> dict:
-    """Refresh the community feed cache if stale. No-op when feed URL is unset."""
-    import os
-    feed_url = url or os.environ.get("PHISHGUARD_THREAT_FEED_URL", "")
-    if not feed_url:
-        return {}
-    ttl_hours = float(os.environ.get("PHISHGUARD_THREAT_FEED_REFRESH_HOURS", "24"))
+def _feed_url() -> str:
+    return os.environ.get("PHISHGUARD_THREAT_FEED_URL", "")
+
+
+def _feed_ttl_hours() -> float:
+    return float(os.environ.get("PHISHGUARD_THREAT_FEED_REFRESH_HOURS", "24"))
+
+
+def _feed_is_stale(now: float | None = None) -> bool:
+    now = _now() if now is None else now
+    if not _feed_fetched_at:
+        return True
+    return (now - _feed_fetched_at) >= _feed_ttl_hours() * 3600
+
+
+def _load_feed_from_cache() -> None:
+    """Load the on-disk feed cache into memory (fast, no network)."""
+    global _feed_entries, _feed_fetched_at, _feed_source, _feed_loaded
     cache = _load_feed_cache()
     fetched_at = cache.get("_fetched_at", 0)
-    entries = cache.get("entries", {})
-    if not force and fetched_at and (time.time() - float(fetched_at)) < ttl_hours * 3600:
-        return entries
+    if fetched_at:
+        _feed_entries = cache.get("entries", {}) or {}
+        _feed_fetched_at = float(fetched_at)
+        _feed_source = cache.get("source", "")
+    _feed_loaded = True
+
+
+def _invalidate_snapshot() -> None:
+    global _snapshot
+    with _snapshot_lock:
+        _snapshot = None
+
+
+def _refresh_feed_background(url: str) -> None:
+    """Fetch + cache the feed off the request path. On failure keep the old data."""
     try:
-        entries = _fetch_feed(feed_url)
-        _save_feed_cache({"_fetched_at": time.time(), "source": feed_url, "entries": entries})
-        logger.info("Threat feed refreshed: %d entries from %s", len(entries), feed_url)
+        entries = _fetch_feed(url)
+        with _feed_lock:
+            global _feed_entries, _feed_fetched_at, _feed_source
+            _feed_entries = entries
+            _feed_fetched_at = _now()
+            _feed_source = url
+        _invalidate_snapshot()
+        _save_feed_cache({"_fetched_at": _feed_fetched_at, "source": url, "entries": entries})
+        logger.info("Threat feed refreshed: %d entries from %s", len(entries), url)
     except Exception:
-        logger.exception("Threat feed refresh failed for %s", feed_url)
-    return entries
+        logger.exception("Threat feed refresh failed for %s", url)
+    finally:
+        with _feed_lock:
+            global _feed_refresh_started
+            _feed_refresh_started = False
+
+
+def ensure_feed_refresh(url: str | None = None, force: bool = False) -> dict:
+    """Populate the in-memory feed snapshot without blocking the caller.
+
+    Returns the current in-memory feed entries immediately. If a disk cache
+    exists it is loaded synchronously (fast, local). A stale/forced feed is
+    refreshed in a single background thread — never in the request path.
+    """
+    feed_url = url or _feed_url()
+    with _feed_lock:
+        global _feed_loaded, _feed_refresh_started
+        if not feed_url:
+            _feed_loaded = True
+            return _feed_entries
+        if not _feed_loaded:
+            _load_feed_from_cache()
+        if (force or _feed_is_stale()) and not _feed_refresh_started:
+            _feed_refresh_started = True
+            threading.Thread(target=_refresh_feed_background, args=(feed_url,),
+                             daemon=True).start()
+        return _feed_entries
+
+
+def refresh_feed(url: str | None = None, force: bool = False) -> dict:
+    """Non-blocking feed refresh: returns current entries, refreshes in background.
+
+    Legacy callers (GET /threat) can keep using this — it never blocks on the
+    network anymore.
+    """
+    return ensure_feed_refresh(url=url, force=force)
+
+
+def _get_snapshot() -> _ThreatSnapshot:
+    """Return the current lookup snapshot, rebuilding only when inputs change."""
+    ensure_feed_refresh()
+    global _snapshot
+    with _snapshot_lock:
+        if _snapshot is None or _snapshot.version != _local_version:
+            _snapshot = _ThreatSnapshot(_local_version, load_known(), _feed_entries)
+        return _snapshot
 
 
 # --------------------------------------------------------------------------
@@ -247,50 +365,42 @@ def _normalize_hostname(url: str) -> str:
 def match_threat(url: str, feed: dict | None = None) -> dict | None:
     """Return a threat match dict or None.
 
+    **Non-blocking**: reads the in-memory snapshot only — never fetches the
+    feed and never touches the network or disk. A community-feed refresh runs
+    in a background thread and swaps in a new snapshot when done.
+
     Matching priority:
       1. exact URL
       2. exact hostname
-      3. registered-domain suffix (last N labels of hostname == value)
-      4. hostname suffix (value is a trailing label sequence, e.g. "paypa1.com")
+      3. registered-domain / hostname suffix (most specific label sequence wins)
+
+    Lookup is O(1) for exact URL/hostname via frozensets and O(labels of
+    hostname) for suffix matches (each trailing label suffix is a set probe),
+    instead of a linear scan over every entry.
     """
     url = (url or "").strip().lower()
     if not url:
         return None
     host = _normalize_hostname(url)
-    feed_entries = feed if feed is not None else refresh_feed()
-    known = load_known()
+    if feed is not None:
+        # Explicit feed override: build a throwaway snapshot (still no network).
+        snap = _ThreatSnapshot(-1, load_known(), feed)
+    else:
+        snap = _get_snapshot()
 
-    all_entries: dict[str, dict] = {}
-    all_entries.update({k: {**v, "layer": "local"} for k, v in known.items()})
-    for k, v in (feed_entries or {}).items():
-        all_entries.setdefault(k, {**v, "layer": "community_feed"})
-
-    def _labels_of(s: str) -> list[str]:
-        return [p for p in s.split(".") if p]
-
-    def _suffix_match(needle: str, candidate: str) -> bool:
-        """True if needle equals candidate or is a subdomain of it."""
-        n_parts = _labels_of(needle)
-        c_parts = _labels_of(candidate)
-        if not n_parts or not c_parts:
-            return False
-        if needle == candidate:
-            return True
-        return len(n_parts) > len(c_parts) and n_parts[-len(c_parts):] == c_parts
-
-    # 1. exact URL match
-    for value, meta in all_entries.items():
-        if "://" in value and value == url:
-            return _mk_match(url, value, meta)
-    # 2/3/4. hostname-based matches (exact, registered-domain, suffix)
-    host_parts = _labels_of(host)
-    for value, meta in all_entries.items():
-        if "://" in value:
-            continue
-        if value == host:
-            return _mk_match(url, value, meta)
-        if _suffix_match(host, value):
-            return _mk_match(url, value, meta)
+    # 1. exact URL
+    if url in snap.exact_urls:
+        return _mk_match(url, url, snap.meta[url])
+    # 2. exact hostname
+    if host in snap.exact_hosts:
+        return _mk_match(url, host, snap.meta[host])
+    # 3/4. suffix: walk host labels from most specific to least, set-probe each
+    if snap.exact_hosts:
+        labels = host.split(".")
+        for i in range(len(labels)):
+            cand = ".".join(labels[i:])
+            if cand in snap.exact_hosts:
+                return _mk_match(url, cand, snap.meta[cand])
     return None
 
 
@@ -306,25 +416,24 @@ def _mk_match(url: str, value: str, meta: dict) -> dict:
 
 
 def get_all() -> dict:
-    known = load_known()
-    feed = refresh_feed()
+    snap = _get_snapshot()
     now = _now()
     entries = []
-    for v, m in known.items():
+    for v, m in snap.known.items():
         entries.append({
             "value": v, "layer": "local", "source": m.get("source", ""),
             "notes": m.get("notes", ""), "added_by": m.get("added_by", ""),
             "added_at": m.get("added_at"), "age_days": round((now - float(m.get("added_at", now))) / 86400, 1) if m.get("added_at") else None,
         })
-    for v, m in (feed or {}).items():
+    for v, m in snap.feed.items():
         entries.append({
             "value": v, "layer": "community_feed", "source": m.get("source", ""),
             "notes": m.get("notes", ""), "added_by": "", "added_at": None, "age_days": None,
         })
     return {
         "count": len(entries),
-        "local_count": len(known),
-        "community_count": len(feed or {}),
-        "feed_enabled": bool(__import__("os").environ.get("PHISHGUARD_THREAT_FEED_URL", "")),
+        "local_count": len(snap.known),
+        "community_count": len(snap.feed),
+        "feed_enabled": bool(_feed_url()),
         "entries": entries,
     }

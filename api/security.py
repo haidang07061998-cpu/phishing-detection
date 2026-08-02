@@ -34,7 +34,7 @@ import json
 import secrets
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 from functools import wraps
 from pathlib import Path
 
@@ -185,8 +185,15 @@ def _key_is_valid(secret: str) -> dict | None:
 # --------------------------------------------------------------------------
 
 _rate_lock = threading.Lock()
-_rate_minute: dict[str, deque] = defaultdict(deque)
-_rate_hour: dict[str, deque] = defaultdict(deque)
+_rate_minute: dict[str, deque] = {}
+_rate_hour: dict[str, deque] = {}
+
+# Bounded-memory guard: idle (empty) buckets are swept away periodically and
+# when the combined IP table grows large — prevents unbounded growth on a
+# long-lived public server with many unique IPs.
+SWEEP_THRESHOLD = 100_000
+SWEEP_INTERVAL = 300.0  # seconds between opportunistic sweeps
+_last_sweep_at = [0.0]  # boxed monotonic clock of last sweep
 
 
 def _client_ip() -> str:
@@ -204,14 +211,48 @@ def _prune(history: deque, window_seconds: float, now: float) -> None:
         history.popleft()
 
 
-def _is_rate_limited(bucket: deque, limit: int, window_seconds: float) -> bool:
+def _record_or_limit(store: dict, ip: str, limit: int, window_seconds: float) -> bool:
+    """Prune, evict empty IP buckets, then record the request.
+
+    Returns True if the IP is over *limit* (no request recorded). An IP whose
+    window fully expires is removed from *store* so idle IPs do not accumulate
+    forever.
+    """
     now = time.monotonic()
-    with _rate_lock:
-        _prune(bucket, window_seconds, now)
-        if len(bucket) < limit:
-            bucket.append(now)
-            return False
+    bucket = store.get(ip)
+    if bucket is None:
+        store[ip] = deque([now])
+        return False
+    _prune(bucket, window_seconds, now)
+    if not bucket:
+        del store[ip]
+        store[ip] = deque([now])
+        return False
+    if len(bucket) >= limit:
         return True
+    bucket.append(now)
+    return False
+
+
+def _maybe_sweep() -> None:
+    """Drop empty buckets periodically / when the IP table grows large.
+
+    Must hold ``_rate_lock``. A no-op at most once every ``SWEEP_INTERVAL``
+    seconds unless the table exceeds ``SWEEP_THRESHOLD``, so the per-request
+    cost is negligible while idle IPs are evicted in bounded time.
+    """
+    now = time.monotonic()
+    if (len(_rate_minute) + len(_rate_hour)) < SWEEP_THRESHOLD and \
+            (now - _last_sweep_at[0]) < SWEEP_INTERVAL:
+        return
+    _last_sweep_at[0] = now
+    for store in (_rate_minute, _rate_hour):
+        for ip in list(store.keys()):
+            bucket = store.get(ip)
+            if bucket is not None:
+                _prune(bucket, 3600, now)
+                if not bucket:
+                    del store[ip]
 
 
 def rate_limit(minute: int | None = None, hour: int | None = None):
@@ -226,16 +267,18 @@ def rate_limit(minute: int | None = None, hour: int | None = None):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             ip = _client_ip()
-            if minute and _is_rate_limited(_rate_minute[ip], minute, 60):
-                return jsonify({
-                    "error": "Rate limit exceeded. Please slow down and try again later.",
-                    "limit": minute,
-                }), 429
-            if hour and _is_rate_limited(_rate_hour[ip], hour, 3600):
-                return jsonify({
-                    "error": "Hourly rate limit exceeded. Please try again later.",
-                    "limit": hour,
-                }), 429
+            with _rate_lock:
+                if minute and _record_or_limit(_rate_minute, ip, minute, 60):
+                    return jsonify({
+                        "error": "Rate limit exceeded. Please slow down and try again later.",
+                        "limit": minute,
+                    }), 429
+                if hour and _record_or_limit(_rate_hour, ip, hour, 3600):
+                    return jsonify({
+                        "error": "Hourly rate limit exceeded. Please try again later.",
+                        "limit": hour,
+                    }), 429
+                _maybe_sweep()
             return fn(*args, **kwargs)
         return wrapper
     return decorator
